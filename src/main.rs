@@ -1,7 +1,8 @@
 use bevy::asset::AssetMetaCheck;
-use bevy::color::palettes::css::*;
 use bevy::prelude::*;
 
+mod debug;
+mod ducks;
 mod lake;
 mod player;
 
@@ -14,9 +15,10 @@ fn main() {
             meta_check: AssetMetaCheck::Never,
             ..default()
         }))
-        // .add_plugins(camera_plugin)
+        .add_plugins(camera_plugin)
         .add_plugins(player::player_plugin)
-        // .add_plugins(draw_transforms_plugin)
+        .add_plugins(ducks::player_plugin)
+        .add_plugins(debug::debug_plugin)
         .add_plugins(lake::lake_plugin)
         .add_systems(Startup, setup)
         .run();
@@ -24,10 +26,6 @@ fn main() {
 
 fn camera_plugin(app: &mut App) {
     app.add_systems(Update, move_camera);
-}
-
-fn draw_transforms_plugin(app: &mut App) {
-    app.add_systems(Update, draw_all_transforms);
 }
 
 fn move_camera(
@@ -111,13 +109,6 @@ fn add_test_scene(
     }
 }
 
-fn draw_all_transforms(mut gizmos: Gizmos, transforms: Query<&GlobalTransform>) {
-    for tf in transforms {
-        let tf = tf.compute_transform();
-        gizmos.axes(tf, 0.5);
-    }
-}
-
 fn setup(mut commands: Commands) {
     commands.spawn((
         DirectionalLight::default(),
@@ -126,6 +117,6 @@ fn setup(mut commands: Commands) {
 
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(5.0, 7.0, 3.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(12.0, 25.0, 8.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 }

@@ -1,62 +1,110 @@
-use bevy::color::palettes::tailwind::*;
-use bevy::prelude::*;
+use bevy::{input::mouse::MouseWheel, prelude::*};
+
+use crate::ducks::Duck;
 
 pub fn player_plugin(app: &mut App) {
-    app.add_systems(Startup, add_player_duck);
-    app.add_systems(Update, handle_player_keys);
-    app.add_systems(FixedUpdate, propagate_player_physics);
+    app.insert_resource(CameraScale {
+        target: 0.0,
+        actual: 0.5,
+    });
+
+    app.add_systems(
+        Update,
+        (
+            handle_player_keys,
+            update_camera_scale,
+            make_camera_follow_player,
+        )
+            .chain(),
+    );
 }
 
-#[derive(Component, Default, Debug)]
-pub struct PlayerDuck {
-    pub velocity: Vec3,
+#[derive(Resource)]
+struct CameraScale {
+    target: f32,
+    actual: f32,
 }
 
-fn add_player_duck(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+#[derive(Component)]
+pub struct PlayerDuck;
+
+fn camera_transform(player: Transform, scale: f32) -> Transform {
+    let cx = 2.0.lerp(0.0, scale);
+    let cy = 2.0.lerp(80.0, scale);
+    let cz = -5.0.lerp(-1.0, scale);
+
+    let mut camera = player * Transform::from_xyz(cx, cy, cz);
+
+    let fx = 0.0;
+    let fy = 0.0;
+    let fz = 10.0.lerp(2.0, scale);
+
+    let focus_transform = Transform::from_xyz(fx, fy, fz);
+
+    let focus = player * focus_transform;
+
+    camera.look_at(focus.translation, Vec3::Y);
+
+    camera
+}
+
+fn make_camera_follow_player(
+    player: Single<&Transform, With<PlayerDuck>>,
+    mut camera: Single<&mut Transform, (With<Camera3d>, Without<PlayerDuck>)>,
+    scale: Res<CameraScale>,
 ) {
-    let body = meshes.add(Capsule3d::new(0.5, 2.0));
-    let material = materials.add(StandardMaterial::from_color(YELLOW_400));
+    **camera = camera_transform(**player, scale.actual);
+}
 
-    commands.spawn((
-        PlayerDuck::default(),
-        Mesh3d(body),
-        MeshMaterial3d(material),
-        Transform::default(),
-    ));
+fn update_camera_scale(mut events: MessageReader<MouseWheel>, mut scale: ResMut<CameraScale>) {
+    let mut delta = 0.0;
+
+    let rate = 0.06;
+
+    for event in events.read() {
+        if event.y < 0.0 {
+            delta += rate;
+        } else {
+            delta -= rate;
+        }
+    }
+
+    scale.target += delta;
+
+    scale.target = scale.target.clamp(0.0, 1.0);
+
+    scale.actual += (scale.target - scale.actual) * 0.05;
 }
 
 fn handle_player_keys(
     keys: Res<ButtonInput<KeyCode>>,
-    mut duck: Query<(&mut PlayerDuck, &Transform)>,
-) -> Result {
-    let mut velocity = Vec3::ZERO;
+    ducks: Query<(&mut Duck, &Transform), With<PlayerDuck>>,
+) {
+    for (mut duck, transform) in ducks {
+        let mut velocity = Vec3::ZERO;
+        let mut angular_velocity = 0.0;
 
-    let (mut duck, transform) = duck.single_mut()?;
+        // forward
+        if keys.pressed(KeyCode::KeyW) {
+            velocity += transform.local_z().as_vec3()
+        }
 
-    if keys.pressed(KeyCode::KeyW) {
-        velocity += transform.forward().as_vec3()
-    }
-    if keys.pressed(KeyCode::KeyA) {
-        velocity += transform.left().as_vec3()
-    }
-    if keys.pressed(KeyCode::KeyS) {
-        velocity += transform.back().as_vec3()
-    }
-    if keys.pressed(KeyCode::KeyD) {
-        velocity += transform.right().as_vec3()
-    }
+        // left
+        if keys.pressed(KeyCode::KeyA) {
+            angular_velocity += 1.0;
+        }
 
-    duck.velocity = velocity;
+        // backward
+        if keys.pressed(KeyCode::KeyS) {
+            velocity -= transform.local_z().as_vec3()
+        }
 
-    Ok(())
-}
+        // right
+        if keys.pressed(KeyCode::KeyD) {
+            angular_velocity -= 1.0;
+        }
 
-fn propagate_player_physics(duck: Query<(&PlayerDuck, &mut Transform)>, time: Res<Time<Fixed>>) {
-    let dt = time.delta_secs();
-    for (duck, mut transform) in duck {
-        transform.translation += duck.velocity * dt;
+        duck.acceleration = velocity * 6.0;
+        duck.angular_acceleration = angular_velocity * 2.0;
     }
 }
