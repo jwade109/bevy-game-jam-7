@@ -6,6 +6,9 @@ use crate::player::PlayerDuck;
 
 pub fn player_plugin(app: &mut App) {
     app.add_systems(Startup, add_ducks);
+
+    app.add_systems(Update, randomize_targets_on_r);
+
     app.add_systems(
         FixedUpdate,
         (
@@ -168,5 +171,15 @@ fn control_ducks_with_target_position(ducks: Query<(&mut Duck, &Transform, &Targ
         let delta_pos = tp.pos - tf.translation;
         let accel = (delta_pos).min(Vec3::splat(10.0));
         duck.acceleration = accel;
+    }
+}
+
+fn randomize_targets_on_r(keys: Res<ButtonInput<KeyCode>>, targets: Query<&mut TargetPosition>) {
+    if !keys.just_pressed(KeyCode::KeyR) {
+        return;
+    }
+
+    for mut tp in targets {
+        *tp = TargetPosition::new();
     }
 }
