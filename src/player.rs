@@ -84,6 +84,11 @@ fn handle_player_keys(
         let mut velocity = Vec3::ZERO;
         let mut angular_velocity = 0.0;
 
+        // jumping
+        if keys.just_pressed(KeyCode::Space) {
+            duck.velocity.y += 10.0;
+        }
+
         // forward
         if keys.pressed(KeyCode::KeyW) {
             velocity += transform.local_z().as_vec3()

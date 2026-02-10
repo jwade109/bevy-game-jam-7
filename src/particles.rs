@@ -136,11 +136,12 @@ fn spawn_ripples(
     }
 }
 
+const GRAVITY: f32 = -9.81;
+
 fn accelerate_particles_with_gravity(particles: Query<&mut Velocity, With<SplashParticle>>) {
-    let gravity = -9.81;
     let dt = 0.02;
     for mut vel in particles {
-        vel.0.y += gravity * dt;
+        vel.0.y += GRAVITY * dt;
     }
 }
 
@@ -162,8 +163,8 @@ fn despawn_particles_under_water(
     }
 }
 
-fn grow_ripples(particles: Query<(&mut Transform, &mut RippleParticle)>) {
-    for (mut tf, mut particle) in particles {
+fn grow_ripples(particles: Query<&mut RippleParticle>) {
+    for mut particle in particles {
         particle.0 += 0.004;
     }
 }

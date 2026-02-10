@@ -17,7 +17,10 @@ pub fn player_plugin(app: &mut App) {
         FixedUpdate,
         (
             damp_velocity,
+            apply_gravity_to_ducks,
+            update_ducks_above_sea_level,
             accelerate_ducks,
+            update_separation_force,
             control_ducks_with_target_position,
             propagate_duck_physics,
             move_duck_heads,
@@ -42,11 +45,46 @@ pub struct Duck {
     pub angular_velocity: f32,
     pub target_head_angle: f32,
     pub actual_head_angle: f32,
+    pub above_sea_level: f32,
 }
 
 impl Duck {
+    pub fn is_in_water(&self) -> bool {
+        self.above_sea_level < 0.0
+    }
+
     pub fn body_fixed_acceleration(&self) -> Vec3 {
-        Vec3::Z * self.is_kicking as u8 as f32 * 10.0
+        let buoyancy = (-self.above_sea_level).max(0.0) * 100.0;
+        let kicking = if self.is_in_water() {
+            self.is_kicking as u8 as f32 * 10.0
+        } else {
+            0.0
+        };
+        Vec3::Z * kicking + Vec3::Y * buoyancy
+    }
+
+    pub fn move_towards_delta(&mut self, tf: Transform, delta: Vec3, radius: f32) {
+        if delta.length() < radius {
+            self.is_kicking = false;
+            self.angular_acceleration = 0.0;
+            return;
+        }
+
+        let right = tf.right();
+        let forward = tf.forward();
+
+        let angle = delta.angle_between(forward.as_vec3());
+        let right_component = delta.dot(right.as_vec3());
+
+        let turn = if right_component > 0.0 {
+            -angle.abs()
+        } else {
+            angle.abs()
+        };
+
+        self.is_kicking = angle.abs() < 0.5;
+
+        self.angular_acceleration = turn * 7.0;
     }
 }
 
@@ -59,6 +97,13 @@ struct AddDuck {
 #[derive(Component, Debug, Default)]
 pub struct TargetPosition {
     pub pos: Vec3,
+    pub radius: f32,
+}
+
+#[derive(Component, Debug)]
+pub struct FollowDuck {
+    pub duck: Entity,
+    pub radius: f32,
 }
 
 impl TargetPosition {
@@ -67,6 +112,7 @@ impl TargetPosition {
         let z = rand::rng().random_range(-100.0..100.0);
         Self {
             pos: Vec3::new(x, 0.0, z),
+            radius: 2.0,
         }
     }
 }
@@ -77,7 +123,7 @@ fn add_ducks(mut commands: Commands) {
         is_player: true,
     });
 
-    for _ in 0..100 {
+    for _ in 0..50 {
         let r = rand::rng().random_range(2.0..100.0);
         let a = rand::rng().random_range(0.0..std::f32::consts::PI * 2.0);
 
@@ -153,8 +199,10 @@ fn on_add_duck(
             Duck {
                 actual_head_angle: rand::rng().random_range(-0.3..=0.3),
                 is_kicking: random_chance(0.2),
+                velocity: Vec3::Y * 3.0,
                 ..default()
             },
+            Separation::default(),
             event.transform,
             RippleEmitter::default(),
             InheritedVisibility::VISIBLE,
@@ -204,8 +252,29 @@ fn on_add_duck(
 
 fn damp_velocity(ducks: Query<&mut Duck>) {
     for mut duck in ducks {
-        duck.velocity *= 0.95;
+        if duck.above_sea_level <= 0.0 {
+            duck.velocity.y *= 0.8;
+            duck.velocity.x *= 0.95;
+            duck.velocity.z *= 0.95;
+        }
         duck.angular_velocity *= 0.95;
+    }
+}
+
+const GRAVITY: f32 = -9.81;
+
+fn apply_gravity_to_ducks(ducks: Query<(&mut Duck, &mut Transform)>) {
+    let dt = 0.02;
+    for (mut duck, mut tf) in ducks {
+        if tf.translation.y > 0.0 {
+            duck.velocity.y += GRAVITY * dt;
+        }
+    }
+}
+
+fn update_ducks_above_sea_level(ducks: Query<(&mut Duck, &Transform)>) {
+    for (mut duck, tf) in ducks {
+        duck.above_sea_level = tf.translation.y;
     }
 }
 
@@ -243,11 +312,43 @@ fn propagate_duck_physics(duck: Query<(&Duck, &mut Transform)>, time: Res<Time<F
     }
 }
 
-fn control_ducks_with_target_position(ducks: Query<(&mut Duck, &Transform, &TargetPosition)>) {
-    for (mut duck, tf, tp) in ducks {
-        let delta_pos = tp.pos - tf.translation;
-        let accel = (delta_pos).min(Vec3::splat(10.0));
-        // duck.acceleration = accel;
+/// Maintains a weighted sum of separation forces
+/// acting on this duck
+#[derive(Component, Default, Debug)]
+pub struct Separation {
+    pub force: Vec3,
+}
+
+fn update_separation_force(
+    sep: Query<(Entity, &mut Separation, &Transform)>,
+    ducks: Query<(Entity, &Transform), With<Duck>>,
+) {
+    let weight = 200.0;
+
+    for (e1, mut sep, p) in sep {
+        sep.force = Vec3::ZERO;
+        for (e2, q) in ducks {
+            if e1 == e2 {
+                continue;
+            }
+
+            let delta = q.translation - p.translation;
+
+            let force = delta.normalize_or_zero() * 1.0 / (1.0 + delta.length().powi(2));
+
+            sep.force += force * weight;
+        }
+    }
+}
+
+fn control_ducks_with_target_position(
+    ducks: Query<(&mut Duck, &Transform, &TargetPosition, &Separation)>,
+) {
+    let mut separation = Vec3::ZERO;
+
+    for (mut duck, tf, tp, sep) in ducks {
+        let delta = tf.translation - tp.pos + sep.force;
+        duck.move_towards_delta(*tf, delta, tp.radius);
     }
 }
 
@@ -266,7 +367,7 @@ fn spawn_particles_if_kicking(
     ducks: Query<(&Duck, &Transform)>,
 ) {
     for (duck, transform) in ducks {
-        if duck.is_kicking {
+        if duck.is_kicking && duck.is_in_water() {
             let vx = rand::rng().random_range(-5.0..=5.0);
             let vy = rand::rng().random_range(2.0..=5.0);
             let vz = rand::rng().random_range(-5.0..=5.0);
@@ -283,6 +384,9 @@ fn spawn_particles_if_kicking(
 
 fn spawn_ripples_if_kicking(ducks: Query<(&Duck, &mut RippleEmitter)>) {
     for (duck, mut emitter) in ducks {
+        if !duck.is_in_water() {
+            continue;
+        }
         emitter.is_on = duck.is_kicking || random_chance(0.001);
     }
 }
