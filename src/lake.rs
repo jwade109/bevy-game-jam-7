@@ -1,9 +1,13 @@
-use bevy::color::palettes::tailwind::BLUE_400;
+use bevy::color::palettes::tailwind::*;
 use bevy::prelude::*;
+use rand::*;
 use std::collections::BTreeMap;
 
 pub fn lake_plugin(app: &mut App) {
-    app.add_systems(Startup, (setup_resources, add_lake_cells).chain());
+    app.add_systems(
+        Startup,
+        (setup_resources, set_sky_color, add_lake_cells).chain(),
+    );
     // app.add_systems(FixedUpdate, update_cell_heights);
 
     app.add_observer(on_add_lake_cell);
@@ -25,6 +29,11 @@ pub fn transform_to_index(transform: Transform) -> IVec2 {
 
 #[derive(Event, Debug)]
 struct AddLakeCell {
+    location: IVec2,
+}
+
+#[derive(Event, Debug)]
+struct AddLillyPad {
     location: IVec2,
 }
 
@@ -50,6 +59,11 @@ fn on_add_lake_cell(
     ));
 }
 
+fn set_sky_color(mut color: ResMut<ClearColor>)
+{
+    color.0 = BLUE_300.into();
+}
+
 #[derive(Resource)]
 struct CellMesh(pub Handle<Mesh>);
 
@@ -62,10 +76,27 @@ fn setup_resources(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let mesh = meshes.add(Cuboid::from_length(1.0));
-    let mat = materials.add(StandardMaterial::from_color(BLUE_400));
+    let mut mat = StandardMaterial::from_color(BLUE_400);
+    mat.reflectance = 0.99;
+    mat.metallic = 0.99;
+    let mat = materials.add(mat);
 
     commands.insert_resource(CellMesh(mesh));
     commands.insert_resource(CellMaterial(mat));
+
+    let lillypad = meshes.add(Cylinder::new(1.0, 0.05));
+    let lillypad_material = materials.add(StandardMaterial::from_color(GREEN_500));
+
+    for _ in 0..200 {
+        let x = rand::rng().random_range(-100.0..100.0);
+        let z = rand::rng().random_range(-100.0..100.0);
+        let tf = Transform::from_xyz(x, 0.0, z);
+        commands.spawn((
+            tf,
+            Mesh3d(lillypad.clone()),
+            MeshMaterial3d(lillypad_material.clone()),
+        ));
+    }
 }
 
 fn add_lake_cells(mut commands: Commands) {

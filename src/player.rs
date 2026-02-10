@@ -104,7 +104,7 @@ fn handle_player_keys(
             angular_velocity -= 1.0;
         }
 
-        duck.acceleration = velocity * 6.0;
+        duck.is_kicking = keys.pressed(KeyCode::KeyW);
         duck.angular_acceleration = angular_velocity * 2.0;
     }
 }
