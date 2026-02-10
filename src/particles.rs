@@ -44,8 +44,27 @@ struct Particle;
 #[derive(Component, Debug)]
 struct SplashParticle;
 
-#[derive(Component, Debug)]
-struct RippleParticle(f32);
+#[derive(Component, Debug, Default)]
+struct RippleParticle {
+    age: f32,
+}
+
+impl RippleParticle {
+    fn alpha(&self) -> f32 {
+        let r = self.radius();
+        0.2.lerp(0.0, r / 7.0)
+    }
+
+    fn thickness(&self) -> f32 {
+        let r = self.radius();
+        0.0.lerp(0.3, r / 7.0)
+    }
+
+    fn radius(&self) -> f32 {
+        let speed = 0.4; // m/s
+        self.age * speed + 0.1
+    }
+}
 
 #[derive(Component, Debug, Default)]
 struct Velocity(Vec3);
@@ -53,9 +72,7 @@ struct Velocity(Vec3);
 #[derive(Resource)]
 struct ParticleResources {
     splash_mesh: Handle<Mesh>,
-    ripple_mesh: Handle<Mesh>,
     splash_material: Handle<StandardMaterial>,
-    ripple_material: Handle<StandardMaterial>,
 }
 
 fn setup_resources(
@@ -66,14 +83,9 @@ fn setup_resources(
     let splash_mesh = meshes.add(Sphere::new(1.0));
     let splash_material = materials.add(StandardMaterial::from_color(BLUE_500));
 
-    let ripple_mesh = meshes.add(Cylinder::new(1.0, 1.0));
-    let ripple_material = materials.add(StandardMaterial::from_color(BLUE_500.with_alpha(0.1)));
-
     let res = ParticleResources {
         splash_mesh,
-        ripple_mesh,
         splash_material,
-        ripple_material,
     };
 
     commands.insert_resource(res);
@@ -102,7 +114,6 @@ fn spawn_splashes(
 fn spawn_ripples(
     mut commands: Commands,
     emitters: Query<(&Transform, &mut RippleEmitter)>,
-    resources: Res<ParticleResources>,
     time: Res<Time<Fixed>>,
 ) {
     let now = time.elapsed();
@@ -124,13 +135,7 @@ fn spawn_ripples(
         let pos = Vec3::new(tf.translation.x, 0.0, tf.translation.z);
         let scale = Vec3::new(0.01, 1.0, 0.01);
         let tf = Transform::from_translation(pos).with_scale(scale);
-        commands.spawn((
-            Mesh3d(resources.ripple_mesh.clone()),
-            MeshMaterial3d(resources.ripple_material.clone()),
-            tf,
-            RippleParticle(0.0),
-            Particle,
-        ));
+        commands.spawn((tf, RippleParticle::default(), Particle));
 
         emitter.last_emitted = Some(now);
     }
@@ -163,15 +168,17 @@ fn despawn_particles_under_water(
     }
 }
 
+// TODO unnecessary
 fn grow_ripples(particles: Query<&mut RippleParticle>) {
+    let dt = 0.02;
     for mut particle in particles {
-        particle.0 += 0.004;
+        particle.age += dt;
     }
 }
 
 fn despawn_ripples_if_too_big(mut commands: Commands, particles: Query<(Entity, &RippleParticle)>) {
     for (e, particle) in particles {
-        if particle.0 >= 1.0 {
+        if particle.alpha() <= 0.01 {
             commands.entity(e).despawn();
         }
     }
@@ -185,13 +192,9 @@ fn draw_ripples(mut painter: ShapePainter, particles: Query<(&Transform, &Ripple
     painter.set_rotation(rot);
 
     for (tf, particle) in particles {
-        let alpha = 0.2.lerp(0.0, particle.0);
-        let t = 0.03.lerp(3.0, particle.0);
-        let r = 0.01.lerp(20.0, particle.0);
-
-        painter.thickness = t;
-        painter.set_color(BLUE_500.with_alpha(alpha));
+        painter.thickness = particle.thickness();
+        painter.set_color(BLUE_800.with_alpha(particle.alpha()));
         painter.set_translation(tf.translation.with_y(0.1));
-        painter.circle(r);
+        painter.circle(particle.radius());
     }
 }

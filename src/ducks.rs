@@ -1,10 +1,8 @@
 use bevy::color::palettes::tailwind::*;
 use bevy::prelude::*;
-use rand::*; // 0.8.5
+use rand::*;
 
-use bevy::{prelude::*, time::Stopwatch};
-
-use crate::math::random_chance;
+use crate::math::{random_chance, random_vec};
 use crate::particles::{RippleEmitter, Splash};
 use crate::player::PlayerDuck;
 
@@ -20,8 +18,10 @@ pub fn player_plugin(app: &mut App) {
             apply_gravity_to_ducks,
             update_ducks_above_sea_level,
             accelerate_ducks,
+            update_tracking_force_for_target_seekers,
             update_separation_force,
-            control_ducks_with_target_position,
+            randomly_wander,
+            control_boids,
             propagate_duck_physics,
             move_duck_heads,
             update_head_turning_transform,
@@ -63,23 +63,23 @@ impl Duck {
         Vec3::Z * kicking + Vec3::Y * buoyancy
     }
 
-    pub fn move_towards_delta(&mut self, tf: Transform, delta: Vec3, radius: f32) {
-        if delta.length() < radius {
+    pub fn move_with_force(&mut self, tf: Transform, force: Vec3, radius: f32) {
+        if force.length() < radius {
             self.is_kicking = false;
             self.angular_acceleration = 0.0;
             return;
         }
 
-        let right = tf.right();
-        let forward = tf.forward();
+        let right = tf.local_x();
+        let forward = tf.local_z();
 
-        let angle = delta.angle_between(forward.as_vec3());
-        let right_component = delta.dot(right.as_vec3());
+        let angle = force.angle_between(forward.as_vec3());
+        let right_component = force.dot(right.as_vec3());
 
         let turn = if right_component > 0.0 {
-            -angle.abs()
-        } else {
             angle.abs()
+        } else {
+            -angle.abs()
         };
 
         self.is_kicking = angle.abs() < 0.5;
@@ -123,7 +123,7 @@ fn add_ducks(mut commands: Commands) {
         is_player: true,
     });
 
-    for _ in 0..50 {
+    for _ in 0..40 {
         let r = rand::rng().random_range(2.0..100.0);
         let a = rand::rng().random_range(0.0..std::f32::consts::PI * 2.0);
 
@@ -202,7 +202,7 @@ fn on_add_duck(
                 velocity: Vec3::Y * 3.0,
                 ..default()
             },
-            Separation::default(),
+            Boid::default(),
             event.transform,
             RippleEmitter::default(),
             InheritedVisibility::VISIBLE,
@@ -312,43 +312,70 @@ fn propagate_duck_physics(duck: Query<(&Duck, &mut Transform)>, time: Res<Time<F
     }
 }
 
-/// Maintains a weighted sum of separation forces
-/// acting on this duck
+/// Tracks all the behaviors forces acting on this duck
 #[derive(Component, Default, Debug)]
-pub struct Separation {
-    pub force: Vec3,
+pub struct Boid {
+    pub separation: Vec3,
+    pub seek_target: Vec3,
+}
+
+impl Boid {
+    pub fn total_force(&self) -> Vec3 {
+        self.seek_target + self.separation
+    }
+}
+
+fn update_tracking_force_for_target_seekers(
+    boids: Query<(&mut Boid, &Transform, &TargetPosition)>,
+) {
+    for (mut boid, tf, tp) in boids {
+        let delta = tp.pos - tf.translation;
+        boid.seek_target = delta.normalize_or_zero() * delta.length().clamp(0.0, 10.0);
+    }
 }
 
 fn update_separation_force(
-    sep: Query<(Entity, &mut Separation, &Transform)>,
+    boids: Query<(Entity, &mut Boid, &Transform)>,
     ducks: Query<(Entity, &Transform), With<Duck>>,
 ) {
     let weight = 200.0;
 
-    for (e1, mut sep, p) in sep {
-        sep.force = Vec3::ZERO;
+    for (e1, mut boid, p) in boids {
+        boid.separation = Vec3::ZERO;
         for (e2, q) in ducks {
             if e1 == e2 {
                 continue;
             }
 
-            let delta = q.translation - p.translation;
+            let delta = p.translation - q.translation;
 
             let force = delta.normalize_or_zero() * 1.0 / (1.0 + delta.length().powi(2));
 
-            sep.force += force * weight;
+            boid.separation += force * weight;
         }
     }
 }
 
-fn control_ducks_with_target_position(
-    ducks: Query<(&mut Duck, &Transform, &TargetPosition, &Separation)>,
-) {
-    let mut separation = Vec3::ZERO;
+fn randomly_wander(targets: Query<&mut TargetPosition>) {
+    for mut target in targets {
+        if random_chance(0.001) {
+            let delta = random_vec(0.1, 4.0);
+            target.pos.x += delta.x;
+            target.pos.z += delta.y;
+            info!("Small wander");
+        } else if random_chance(0.00003) {
+            let pos = random_vec(0.0, 200.0);
+            target.pos.x = pos.x;
+            target.pos.z = pos.y;
+            info!("Large wander");
+        }
+    }
+}
 
-    for (mut duck, tf, tp, sep) in ducks {
-        let delta = tf.translation - tp.pos + sep.force;
-        duck.move_towards_delta(*tf, delta, tp.radius);
+fn control_boids(ducks: Query<(&mut Duck, &Transform, &Boid)>) {
+    for (mut duck, tf, boid) in ducks {
+        let force = boid.total_force();
+        duck.move_with_force(*tf, force, 0.5);
     }
 }
 

@@ -3,11 +3,13 @@ use bevy::prelude::*;
 use bevy_vector_shapes::prelude::*;
 
 mod debug;
+mod detached_camera;
 mod ducks;
 mod lake;
 mod math;
 mod particles;
 mod player;
+mod test_scene;
 
 fn main() {
     App::new()
@@ -19,7 +21,7 @@ fn main() {
             ..default()
         }))
         .add_plugins(ShapePlugin::default())
-        .add_plugins(camera_plugin)
+        // .add_plugins(camera_plugin)
         .add_plugins(player::player_plugin)
         .add_plugins(ducks::player_plugin)
         .add_plugins(debug::debug_plugin)
@@ -27,91 +29,6 @@ fn main() {
         .add_plugins(particles::particles_plugin)
         .add_systems(Startup, setup)
         .run();
-}
-
-fn camera_plugin(app: &mut App) {
-    app.add_systems(Update, move_camera);
-}
-
-fn move_camera(
-    keys: Res<ButtonInput<KeyCode>>,
-    mut camera: Single<&mut Transform, With<Camera3d>>,
-) {
-    let mut direction = Vec3::ZERO;
-
-    if keys.pressed(KeyCode::KeyW) {
-        direction += camera.forward().as_vec3()
-    }
-    if keys.pressed(KeyCode::KeyA) {
-        direction += camera.left().as_vec3()
-    }
-    if keys.pressed(KeyCode::KeyS) {
-        direction += camera.back().as_vec3()
-    }
-    if keys.pressed(KeyCode::KeyD) {
-        direction += camera.right().as_vec3()
-    }
-    if keys.pressed(KeyCode::ControlLeft) {
-        direction += camera.down().as_vec3()
-    }
-    if keys.pressed(KeyCode::Space) {
-        direction += camera.up().as_vec3()
-    }
-
-    let speed = 0.1;
-
-    camera.translation += direction.normalize_or_zero() * speed;
-
-    camera.look_at(Vec3::ZERO, Vec3::Y);
-}
-
-fn add_test_scene(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    let sphere = meshes.add(Sphere::new(0.4));
-
-    for x in 0..=10 {
-        for z in 0..=10 {
-            let sphere_material = materials.add(StandardMaterial {
-                metallic: x as f32 / 10.0,
-                reflectance: z as f32 / 10.0,
-                ..default()
-            });
-
-            let x = x as f32 - 5.0;
-            let z = z as f32 - 5.0;
-
-            let tf = Transform::from_xyz(x, 0.0, z);
-            commands.spawn((Mesh3d(sphere.clone()), tf, MeshMaterial3d(sphere_material)));
-        }
-    }
-
-    let platform = meshes.add(Cuboid::new(1.0, 0.1, 1.0));
-
-    let dark_material = materials.add(StandardMaterial {
-        base_color: Srgba::gray(0.2).into(),
-        ..Default::default()
-    });
-
-    let light_material = materials.add(StandardMaterial {
-        base_color: Srgba::gray(0.8).into(),
-        ..Default::default()
-    });
-
-    for x in -20..=20 {
-        for z in -20..=20 {
-            let mat = if (x + z) % 2 == 0 {
-                dark_material.clone()
-            } else {
-                light_material.clone()
-            };
-
-            let tf = Transform::from_xyz(x as f32, -5.0, z as f32);
-            commands.spawn((Mesh3d(platform.clone()), MeshMaterial3d(mat), tf));
-        }
-    }
 }
 
 fn setup(mut commands: Commands) {

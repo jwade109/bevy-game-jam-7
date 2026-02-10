@@ -3,6 +3,8 @@ use bevy::prelude::*;
 use rand::*;
 use std::collections::BTreeMap;
 
+use crate::math::random_vec;
+
 pub fn lake_plugin(app: &mut App) {
     app.add_systems(
         Startup,
@@ -59,8 +61,7 @@ fn on_add_lake_cell(
     ));
 }
 
-fn set_sky_color(mut color: ResMut<ClearColor>)
-{
+fn set_sky_color(mut color: ResMut<ClearColor>) {
     color.0 = BLUE_300.into();
 }
 
@@ -69,6 +70,8 @@ struct CellMesh(pub Handle<Mesh>);
 
 #[derive(Resource)]
 struct CellMaterial(pub Handle<StandardMaterial>);
+
+pub const LAKE_RADIUS: f32 = 200.0;
 
 fn setup_resources(
     mut commands: Commands,
@@ -88,9 +91,8 @@ fn setup_resources(
     let lillypad_material = materials.add(StandardMaterial::from_color(GREEN_500));
 
     for _ in 0..200 {
-        let x = rand::rng().random_range(-100.0..100.0);
-        let z = rand::rng().random_range(-100.0..100.0);
-        let tf = Transform::from_xyz(x, 0.0, z);
+        let pos = random_vec(0.0, LAKE_RADIUS);
+        let tf = Transform::from_xyz(pos.x, 0.0, pos.y);
         commands.spawn((
             tf,
             Mesh3d(lillypad.clone()),
