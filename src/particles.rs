@@ -96,6 +96,8 @@ fn spawn_splashes(
     resources: Res<ParticleResources>,
     mut messages: MessageReader<Splash>,
 ) {
+    return;
+
     for msg in messages.read() {
         let size = random_range(0.05..=0.25);
 

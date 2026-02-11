@@ -11,10 +11,17 @@ pub fn debug_plugin(app: &mut App) {
 
     app.add_systems(
         Update,
-        (draw_origin, draw_all_target_positions, draw_boid_forces).run_if(is_debug_enabled),
+        (
+            draw_origin,
+            draw_all_target_positions,
+            draw_boid_forces,
+            draw_all_ducks_seeking_parent,
+            draw_all_ducks_with_parent,
+        )
+            .run_if(is_debug_enabled),
     );
 
-    app.insert_state(DebugState::Enabled);
+    app.insert_state(DebugState::Disabled);
     // app.add_systems(Update, draw_all_transforms);
 }
 
@@ -86,4 +93,35 @@ fn draw_boid_forces(mut gizmos: Gizmos, sep: Query<(&Transform, &Boid), Without<
         let q = p + sep.total_force();
         gizmos.line(p, q, RED);
     }
+}
+
+fn draw_all_ducks_seeking_parent(
+    mut gizmos: Gizmos,
+    ducks: Query<&Transform, (With<Duckling>, Without<ParentDuck>)>,
+) {
+    for tf in ducks {
+        let p = tf.translation.with_y(DUCK_DEBUG_MARKERS_Y + 2.0);
+        gizmos.cube(
+            Transform::from_translation(p).with_scale(Vec3::splat(0.3)),
+            ORANGE,
+        );
+    }
+}
+
+fn draw_all_ducks_with_parent(
+    mut gizmos: Gizmos,
+    transforms: Query<&Transform, With<Duck>>,
+    ducklings: Query<(&Transform, &ParentDuck)>,
+) -> Result {
+    for (tf, parent) in ducklings {
+        let parent_tf = transforms.get(parent.duck)?;
+        let p = tf.translation.with_y(DUCK_DEBUG_MARKERS_Y + 2.0);
+        let q = parent_tf.translation.with_y(DUCK_DEBUG_MARKERS_Y + 2.0);
+        gizmos.line(p, q, TEAL);
+        let p = Transform::from_translation(p).with_scale(Vec3::splat(0.5));
+        let q = Transform::from_translation(q).with_scale(Vec3::splat(0.3));
+        gizmos.cube(p, RED);
+        gizmos.cube(q, GREEN);
+    }
+    Ok(())
 }

@@ -1,3 +1,4 @@
+use bevy::audio::Volume;
 use bevy::color::palettes::tailwind::*;
 use bevy::prelude::*;
 use rand::*;
@@ -14,6 +15,7 @@ pub fn player_plugin(app: &mut App) {
     app.add_systems(
         FixedUpdate,
         (
+            assign_parent_to_parentless_ducks,
             damp_velocity,
             apply_gravity_to_ducks,
             update_ducks_above_sea_level,
@@ -21,6 +23,7 @@ pub fn player_plugin(app: &mut App) {
             update_tracking_force_for_target_seekers,
             update_separation_force,
             randomly_wander,
+            update_target_pos_for_ducks_with_parents,
             control_boids,
             propagate_duck_physics,
             move_duck_heads,
@@ -40,6 +43,7 @@ pub fn player_plugin(app: &mut App) {
 #[derive(Component, Default, Debug)]
 pub struct Duck {
     pub is_kicking: bool,
+    pub speed_mod: f32,
     pub velocity: Vec3,
     pub angular_acceleration: f32,
     pub angular_velocity: f32,
@@ -60,7 +64,7 @@ impl Duck {
         } else {
             0.0
         };
-        Vec3::Z * kicking + Vec3::Y * buoyancy
+        Vec3::Z * kicking * self.speed_mod + Vec3::Y * buoyancy
     }
 
     pub fn move_with_force(&mut self, tf: Transform, force: Vec3, radius: f32) {
@@ -92,18 +96,20 @@ impl Duck {
 struct AddDuck {
     transform: Transform,
     is_player: bool,
+    is_child: bool,
 }
 
 #[derive(Component, Debug, Default)]
 pub struct TargetPosition {
     pub pos: Vec3,
-    pub radius: f32,
 }
 
+#[derive(Component)]
+pub struct Duckling;
+
 #[derive(Component, Debug)]
-pub struct FollowDuck {
+pub struct ParentDuck {
     pub duck: Entity,
-    pub radius: f32,
 }
 
 impl TargetPosition {
@@ -112,18 +118,36 @@ impl TargetPosition {
         let z = rand::rng().random_range(-100.0..100.0);
         Self {
             pos: Vec3::new(x, 0.0, z),
-            radius: 2.0,
         }
     }
+}
+
+fn assign_parent_to_parentless_ducks(
+    mut commands: Commands,
+    adults: Query<(Entity, &Transform), (With<Duck>, Without<Duckling>)>,
+    parentless: Query<(Entity, &Transform), (With<Duckling>, Without<ParentDuck>)>,
+) -> Result {
+    for (pl, p) in parentless {
+        for (e, q) in adults {
+            let dist = p.translation.distance(q.translation);
+            if dist < 15.0 {
+                commands.entity(pl).insert(ParentDuck { duck: e });
+                info!("Assigned duckling {} parent of {}", pl, e);
+                break;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn add_ducks(mut commands: Commands) {
     commands.trigger(AddDuck {
         transform: Transform::default(),
         is_player: true,
+        is_child: false,
     });
 
-    for _ in 0..40 {
+    for _ in 0..120 {
         let r = rand::rng().random_range(2.0..100.0);
         let a = rand::rng().random_range(0.0..std::f32::consts::PI * 2.0);
 
@@ -132,7 +156,13 @@ fn add_ducks(mut commands: Commands) {
 
         let angle = rand::rng().random_range(0.0..std::f32::consts::PI * 2.0);
 
-        let scale = rand::rng().random_range(0.3..1.0);
+        let is_child = random_chance(0.9);
+
+        let scale = if is_child {
+            random_range(0.2..0.3)
+        } else {
+            random_range(0.6..1.0)
+        };
 
         let transform = Transform::from_xyz(x, 0.0, z)
             .with_rotation(Quat::from_rotation_y(angle))
@@ -141,6 +171,7 @@ fn add_ducks(mut commands: Commands) {
         commands.trigger(AddDuck {
             transform,
             is_player: false,
+            is_child,
         });
     }
 }
@@ -194,12 +225,19 @@ fn on_add_duck(
     let right_eye_transform = Transform::from_xyz(eye_distance / 2.0, 0.6, 0.2);
     let left_eye_transform = Transform::from_xyz(-eye_distance / 2.0, 0.6, 0.2);
 
+    let speed_mod = if event.is_child {
+        random_range(1.3..=2.1)
+    } else {
+        random_range(0.9..=1.1)
+    };
+
     let root = commands
         .spawn((
             Duck {
                 actual_head_angle: rand::rng().random_range(-0.3..=0.3),
                 is_kicking: random_chance(0.2),
                 velocity: Vec3::Y * 3.0,
+                speed_mod,
                 ..default()
             },
             event.transform,
@@ -237,19 +275,35 @@ fn on_add_duck(
 
     commands.entity(root).add_child(head);
 
-    // if random_chance(0.8) {
+    if event.is_child {
+        commands.entity(root).insert(Duckling);
+    }
 
     if !event.is_player {
-        let idx = random_range(2..=5);
+        let idx = if event.is_child { 4 } else { 2 };
         let name = format!("wek{idx}.ogg");
-
+        let speed = random_range(0.95..=1.5);
         commands.entity(root).insert((
             AudioPlayer::new(asset_server.load(name)),
-            PlaybackSettings::LOOP.with_spatial(true),
+            PlaybackSettings::LOOP
+                .with_spatial(true)
+                .with_duration(std::time::Duration::from_secs(3))
+                .with_speed(speed)
+                .with_volume(Volume::Linear(0.3)),
             Boid::default(),
         ));
     }
-    // }
+}
+
+fn update_target_pos_for_ducks_with_parents(
+    ducks: Query<(&ParentDuck, &mut TargetPosition)>,
+    transforms: Query<&Transform>,
+) -> Result {
+    for (parent, mut tp) in ducks {
+        let tf = transforms.get(parent.duck)?;
+        tp.pos = tf.translation;
+    }
+    Ok(())
 }
 
 fn damp_velocity(ducks: Query<&mut Duck>) {
@@ -337,17 +391,25 @@ fn update_tracking_force_for_target_seekers(
 }
 
 fn update_separation_force(
-    boids: Query<(Entity, &mut Boid, &Transform)>,
-    ducks: Query<(Entity, &Transform), With<Duck>>,
+    boids: Query<(Entity, &mut Boid, &Transform, Option<&Duckling>)>,
+    ducks: Query<(Entity, &Transform, Option<&Duckling>), With<Duck>>,
 ) {
-    let weight = 200.0;
-
-    for (e1, mut boid, p) in boids {
+    for (e1, mut boid, p, ego) in boids {
         boid.separation = Vec3::ZERO;
-        for (e2, q) in ducks {
+        for (e2, q, other) in ducks {
             if e1 == e2 {
                 continue;
             }
+
+            let ego_is_adult = ego.is_none();
+            let other_is_adult = other.is_none();
+
+            let weight = match (ego_is_adult, other_is_adult) {
+                (true, true) => 200.0,
+                (true, false) => 0.0,
+                (false, true) => 10.0,
+                (false, false) => 1.0,
+            };
 
             let delta = p.translation - q.translation;
 
@@ -364,12 +426,10 @@ fn randomly_wander(targets: Query<&mut TargetPosition>) {
             let delta = random_vec(0.1, 4.0);
             target.pos.x += delta.x;
             target.pos.z += delta.y;
-            info!("Small wander");
         } else if random_chance(0.00003) {
             let pos = random_vec(0.0, 200.0);
             target.pos.x = pos.x;
             target.pos.z = pos.y;
-            info!("Large wander");
         }
     }
 }
