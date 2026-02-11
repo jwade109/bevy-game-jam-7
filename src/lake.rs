@@ -6,10 +6,7 @@ use std::collections::BTreeMap;
 use crate::math::random_vec;
 
 pub fn lake_plugin(app: &mut App) {
-    app.add_systems(
-        Startup,
-        (setup_resources, set_sky_color, add_lake_cells).chain(),
-    );
+    app.add_systems(Startup, (setup_resources, add_lake_cells).chain());
     // app.add_systems(FixedUpdate, update_cell_heights);
 
     app.add_observer(on_add_lake_cell);
@@ -34,11 +31,6 @@ struct AddLakeCell {
     location: IVec2,
 }
 
-#[derive(Event, Debug)]
-struct AddLillyPad {
-    location: IVec2,
-}
-
 fn on_add_lake_cell(
     event: On<AddLakeCell>,
     mut commands: Commands,
@@ -59,10 +51,6 @@ fn on_add_lake_cell(
         rotation,
         MeshMaterial3d(mat.0.clone()),
     ));
-}
-
-fn set_sky_color(mut color: ResMut<ClearColor>) {
-    color.0 = GRAY_800.into();
 }
 
 #[derive(Resource)]
@@ -105,14 +93,4 @@ fn add_lake_cells(mut commands: Commands) {
     commands.trigger(AddLakeCell {
         location: (0, 0).into(),
     });
-}
-
-fn update_cell_heights(cells: Query<&mut Transform, With<LakeCell>>, time: Res<Time<Fixed>>) {
-    let t = time.elapsed_secs();
-    for mut tf in cells {
-        let x = tf.translation.x;
-        let z = tf.translation.z;
-        let y = ((x + z) as f32 / 10.0 + t).sin() * 3.0;
-        tf.translation.y = y;
-    }
 }

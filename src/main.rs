@@ -36,11 +36,6 @@ fn main() {
 }
 
 fn setup(mut commands: Commands) {
-    // commands.spawn((
-    //     DirectionalLight::default(),
-    //     Transform::from_xyz(12.0, 20.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
-    // ));
-
     commands.spawn((
         Camera3d::default(),
         Projection::Perspective(PerspectiveProjection {

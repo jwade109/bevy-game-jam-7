@@ -82,7 +82,7 @@ impl Duck {
             -angle.abs()
         };
 
-        self.is_kicking = angle.abs() < 0.5;
+        self.is_kicking = angle.abs() < std::f32::consts::PI / 2.0;
 
         self.angular_acceleration = turn * 7.0;
     }
@@ -377,7 +377,7 @@ fn randomly_wander(targets: Query<&mut TargetPosition>) {
 fn control_boids(ducks: Query<(&mut Duck, &Transform, &Boid)>) {
     for (mut duck, tf, boid) in ducks {
         let force = boid.total_force();
-        duck.move_with_force(*tf, force, 0.5);
+        duck.move_with_force(*tf, force, 1.5);
     }
 }
 
