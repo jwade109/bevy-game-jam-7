@@ -13,12 +13,12 @@ pub fn clouds_plugin(app: &mut App) {
     );
 }
 
-const NUM_CLOUDS: usize = 2000;
-const CLOUD_RANGE: f32 = 5000.0;
-const CLOUD_HEIGHT: f32 = 500.0;
-const CLOUD_MAX_RADIUS: f32 = 400.0;
+const NUM_CLOUDS: usize = 3000;
+const CLOUD_RANGE: f32 = 10000.0;
+const CLOUD_HEIGHT: f32 = 900.0;
+const CLOUD_MAX_RADIUS: f32 = 800.0;
 const CLOUD_NOISE_SCALE: f32 = 2000.0;
-const CLOUD_SPEED: f32 = 0.0003;
+const CLOUD_SPEED: f32 = 0.003;
 
 #[derive(Resource, Deref, DerefMut)]
 struct NoiseFunc(Noise<MixCellGradients<OrthoGrid, Smoothstep, QuickGradients>>);
@@ -77,6 +77,6 @@ fn sample_cloud_size(
         let t: f32 = noise.sample(p); // [-1, 1]
         // let t = (t + 1.0) / 2.0; // [0, 1]
         let radius = t.clamp(0.0, 1.0) * CLOUD_MAX_RADIUS;
-        tf.scale = Vec3::splat(radius);
+        tf.scale = Vec3::new(radius, radius / 2.0, radius);
     }
 }

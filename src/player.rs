@@ -30,14 +30,14 @@ pub struct PlayerDuck;
 
 fn camera_transform(player: Transform, scale: f32) -> Transform {
     let cx = 2.0.lerp(0.0, scale);
-    let cy = 2.0.lerp(300.0, scale);
+    let cy = 2.0.lerp(30.0, scale);
     let cz = -5.0.lerp(-1.0, scale);
 
     let mut camera = player * Transform::from_xyz(cx, cy, cz);
 
     let fx = 0.0;
     let fy = 0.0;
-    let fz = 10.0.lerp(2.0, scale);
+    let fz = 10.0.lerp(15.0, scale);
 
     let focus_transform = Transform::from_xyz(fx, fy, fz);
 
