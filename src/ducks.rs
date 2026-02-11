@@ -240,13 +240,15 @@ fn on_add_duck(
 
     // if random_chance(0.8) {
 
-    let idx = random_range(2..=5);
-    let name = format!("wek{idx}.ogg");
+    if !event.is_player {
+        let idx = random_range(2..=5);
+        let name = format!("wek{idx}.ogg");
 
-    commands.entity(root).insert((
-        AudioPlayer::new(asset_server.load(name)),
-        PlaybackSettings::LOOP.with_spatial(true),
-    ));
+        commands.entity(root).insert((
+            AudioPlayer::new(asset_server.load(name)),
+            PlaybackSettings::LOOP.with_spatial(true),
+        ));
+    }
     // }
 }
 

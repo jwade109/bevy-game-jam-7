@@ -2,6 +2,7 @@ use bevy::asset::AssetMetaCheck;
 use bevy::prelude::*;
 use bevy_vector_shapes::prelude::*;
 
+mod clouds;
 mod debug;
 mod detached_camera;
 mod ducks;
@@ -27,6 +28,7 @@ fn main() {
         .add_plugins(debug::debug_plugin)
         .add_plugins(lake::lake_plugin)
         .add_plugins(particles::particles_plugin)
+        .add_plugins(clouds::clouds_plugin)
         .add_systems(Startup, setup)
         .run();
 }
@@ -39,6 +41,10 @@ fn setup(mut commands: Commands) {
 
     commands.spawn((
         Camera3d::default(),
+        Projection::Perspective(PerspectiveProjection {
+            fov: std::f32::consts::PI / 2.0,
+            ..default()
+        }),
         SpatialListener::new(1.0),
         Transform::from_xyz(12.0, 25.0, 8.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
