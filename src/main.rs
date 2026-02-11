@@ -11,6 +11,7 @@ mod math;
 mod particles;
 mod player;
 mod test_scene;
+mod weather;
 
 fn main() {
     App::new()
@@ -29,15 +30,16 @@ fn main() {
         .add_plugins(lake::lake_plugin)
         .add_plugins(particles::particles_plugin)
         .add_plugins(clouds::clouds_plugin)
+        .add_plugins(weather::weather_plugin)
         .add_systems(Startup, setup)
         .run();
 }
 
 fn setup(mut commands: Commands) {
-    commands.spawn((
-        DirectionalLight::default(),
-        Transform::from_xyz(12.0, 20.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
-    ));
+    // commands.spawn((
+    //     DirectionalLight::default(),
+    //     Transform::from_xyz(12.0, 20.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
+    // ));
 
     commands.spawn((
         Camera3d::default(),

@@ -62,7 +62,7 @@ fn on_add_lake_cell(
 }
 
 fn set_sky_color(mut color: ResMut<ClearColor>) {
-    color.0 = BLUE_300.into();
+    color.0 = GRAY_800.into();
 }
 
 #[derive(Resource)]

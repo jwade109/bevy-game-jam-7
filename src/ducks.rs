@@ -202,7 +202,6 @@ fn on_add_duck(
                 velocity: Vec3::Y * 3.0,
                 ..default()
             },
-            Boid::default(),
             event.transform,
             RippleEmitter::default(),
             InheritedVisibility::VISIBLE,
@@ -247,6 +246,7 @@ fn on_add_duck(
         commands.entity(root).insert((
             AudioPlayer::new(asset_server.load(name)),
             PlaybackSettings::LOOP.with_spatial(true),
+            Boid::default(),
         ));
     }
     // }
