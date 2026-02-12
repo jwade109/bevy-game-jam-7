@@ -95,10 +95,7 @@ fn add_clouds(
 ) {
     let cloud_mesh = meshes.add(Sphere::new(1.0).mesh().ico(5).unwrap());
 
-    let mut cloud_material = StandardMaterial::from_color(GRAY_600);
-    cloud_material.emissive = GRAY_50.into();
-
-    let cloud_material = materials.add(cloud_material);
+    let cloud_material = materials.add(StandardMaterial::from_color(GRAY_600));
 
     commands.insert_resource(CloudMaterial(cloud_material.clone()));
 

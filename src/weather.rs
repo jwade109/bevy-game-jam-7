@@ -1,6 +1,8 @@
 use bevy::color::palettes::tailwind::*;
 use bevy::{audio::Volume, prelude::*};
 
+use crate::math::random_vec;
+use crate::particles::RippleParticle;
 use crate::{
     clouds::{SetCloudColor, SetWindSpeed},
     math::{random_chance, random_range},
@@ -11,12 +13,15 @@ pub fn weather_plugin(app: &mut App) {
     app.add_systems(Startup, (add_sunlight, set_sky_color));
 
     app.add_systems(Update, (spawn_lightning_on_l, toggle_weather_on_m));
+    app.add_systems(FixedUpdate, update_lightning);
+
     app.add_systems(
         FixedUpdate,
         (
-            update_lightning,
-            randomly_spawn_lightning.run_if(in_state(Weather::Thunderstorm)),
-        ),
+            randomly_spawn_lightning,
+            trigger_random_ripples_from_raindrops,
+        )
+            .run_if(in_state(Weather::Thunderstorm)),
     );
 
     app.add_systems(
@@ -50,17 +55,29 @@ fn on_clear_weather(mut commands: Commands, mut color: ResMut<ClearColor>) {
 fn on_thunderstorm(mut commands: Commands, mut color: ResMut<ClearColor>) {
     info!("Thunderstorm!");
     commands.trigger(SetWindSpeed(7.0));
-    commands.trigger(SetCloudColor(Srgba::gray(0.04).into()));
+    commands.trigger(SetCloudColor(Srgba::gray(0.2).into()));
 
     color.0 = GRAY_700.into();
 }
 
 fn brighten_sun(mut sun: Single<&mut DirectionalLight, With<Sun>>) {
     sun.illuminance = light_consts::lux::OVERCAST_DAY;
+    sun.color = Color::WHITE;
 }
 
 fn darken_sun(mut sun: Single<&mut DirectionalLight, With<Sun>>) {
     sun.illuminance = light_consts::lux::FULL_MOON_NIGHT;
+    sun.color = Color::BLACK;
+}
+
+fn trigger_random_ripples_from_raindrops(mut commands: Commands) {
+    for _ in 0..100 {
+        if random_chance(0.1) {
+            let p = random_vec(0.0, 300.0);
+            let tf = Transform::from_xyz(p.x, 0.05, p.y);
+            commands.spawn((RippleParticle::default(), tf));
+        }
+    }
 }
 
 fn randomly_spawn_lightning(mut commands: Commands) {
@@ -165,7 +182,7 @@ fn update_lightning(
 }
 
 fn spawn_lightning_on_l(mut commands: Commands, keys: Res<ButtonInput<KeyCode>>) {
-    if keys.just_pressed(KeyCode::KeyL) {
+    if keys.pressed(KeyCode::ControlLeft) && keys.just_pressed(KeyCode::KeyL) {
         commands.trigger(LightningEvent);
     }
 }

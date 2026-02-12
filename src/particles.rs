@@ -45,7 +45,7 @@ struct Particle;
 struct SplashParticle;
 
 #[derive(Component, Debug, Default)]
-struct RippleParticle {
+pub struct RippleParticle {
     age: f32,
 }
 
