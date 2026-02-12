@@ -39,7 +39,7 @@ pub fn weather_plugin(app: &mut App) {
 }
 
 #[derive(States, Debug, Clone, Copy, Hash, PartialEq, Eq)]
-enum Weather {
+pub enum Weather {
     Clear,
     Thunderstorm,
 }

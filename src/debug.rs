@@ -17,6 +17,7 @@ pub fn debug_plugin(app: &mut App) {
             draw_boid_forces,
             draw_all_ducks_seeking_parent,
             draw_all_ducks_with_parent,
+            draw_all_spatial_audio,
         )
             .run_if(is_debug_enabled),
     );
@@ -122,6 +123,20 @@ fn draw_all_ducks_with_parent(
         let q = Transform::from_translation(q).with_scale(Vec3::splat(0.3));
         gizmos.cube(p, RED);
         gizmos.cube(q, GREEN);
+    }
+    Ok(())
+}
+
+fn draw_all_spatial_audio(
+    mut gizmos: Gizmos,
+    transforms: TransformHelper,
+    sounds: Query<Entity, With<SpatialAudioSink>>,
+) -> Result {
+    for s in sounds {
+        let tf = transforms.compute_global_transform(s)?.compute_transform();
+        for r in [0.2, 0.3, 0.4, 0.5] {
+            gizmos.sphere(Isometry3d::from_translation(tf.translation), r, PURPLE);
+        }
     }
     Ok(())
 }

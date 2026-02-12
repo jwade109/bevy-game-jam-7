@@ -3,10 +3,12 @@ use bevy::color::palettes::tailwind::*;
 use bevy::prelude::*;
 use rand::*;
 
+use crate::despawn_after::DespawnAfter;
 use crate::math::{random_chance, random_vec};
 use crate::particles::{RippleEmitter, Splash};
 use crate::player::PlayerDuck;
-use crate::text_bubble::Speak;
+use crate::text_bubble::Quack;
+use crate::weather::Weather;
 
 pub fn player_plugin(app: &mut App) {
     app.add_systems(Startup, add_ducks);
@@ -17,6 +19,7 @@ pub fn player_plugin(app: &mut App) {
         FixedUpdate,
         (
             assign_parent_to_parentless_ducks,
+            celebrating_ducks_quack_excitedly,
             damp_velocity,
             apply_gravity_to_ducks,
             update_ducks_above_sea_level,
@@ -29,7 +32,7 @@ pub fn player_plugin(app: &mut App) {
             propagate_duck_physics,
             move_duck_heads,
             update_head_turning_transform,
-            randomly_speak,
+            duckings_randomly_quack,
         )
             .chain(),
     );
@@ -38,6 +41,8 @@ pub fn player_plugin(app: &mut App) {
         FixedUpdate,
         (spawn_particles_if_kicking, spawn_ripples_if_kicking),
     );
+
+    app.add_observer(spawn_sounds_on_quack);
 
     app.add_observer(on_add_duck);
 }
@@ -124,6 +129,23 @@ impl TargetPosition {
     }
 }
 
+#[derive(Component)]
+struct Celebrating {
+    duck: Entity,
+}
+
+fn celebrating_ducks_quack_excitedly(mut commands: Commands, cel: Query<&Celebrating>) {
+    for cel in cel {
+        if random_chance(0.03) {
+            let quack = Quack {
+                entity: cel.duck,
+                text: "Happy quack!".into(),
+            };
+            commands.trigger(quack);
+        }
+    }
+}
+
 fn assign_parent_to_parentless_ducks(
     mut commands: Commands,
     adults: Query<(Entity, &Transform), (With<Duck>, Without<Duckling>)>,
@@ -135,6 +157,10 @@ fn assign_parent_to_parentless_ducks(
             if dist < 15.0 {
                 commands.entity(pl).insert(ParentDuck { duck: e });
                 info!("Assigned duckling {} parent of {}", pl, e);
+                commands.spawn((
+                    Celebrating { duck: pl },
+                    DespawnAfter::new(std::time::Duration::from_secs(3)),
+                ));
                 break;
             }
         }
@@ -142,7 +168,7 @@ fn assign_parent_to_parentless_ducks(
     Ok(())
 }
 
-const NUM_DUCKS: usize = 20;
+const NUM_DUCKS: usize = 70;
 
 fn add_ducks(mut commands: Commands) {
     commands.trigger(AddDuck {
@@ -284,18 +310,7 @@ fn on_add_duck(
     }
 
     if !event.is_player {
-        let idx = if event.is_child { 4 } else { 2 };
-        let name = format!("wek{idx}.ogg");
-        let speed = random_range(0.95..=1.5);
-        commands.entity(root).insert((
-            AudioPlayer::new(asset_server.load(name)),
-            PlaybackSettings::LOOP
-                .with_spatial(true)
-                .with_duration(std::time::Duration::from_secs(3))
-                .with_speed(speed)
-                .with_volume(Volume::Linear(0.3)),
-            Boid::default(),
-        ));
+        commands.entity(root).insert(Boid::default());
     }
 }
 
@@ -484,14 +499,42 @@ fn spawn_ripples_if_kicking(ducks: Query<(&Duck, &mut RippleEmitter)>) {
     }
 }
 
-fn randomly_speak(mut commands: Commands, ducks: Query<Entity, With<Duckling>>) {
+fn duckings_randomly_quack(
+    mut commands: Commands,
+    ducks: Query<Entity, With<Duckling>>,
+    weather: Res<State<Weather>>,
+) {
+    let rate = match **weather {
+        Weather::Clear => 0.002,
+        Weather::Thunderstorm => 0.02,
+    };
+
     for duck in ducks {
-        if random_chance(0.001) {
-            let msg = "HELLO THERE";
-            commands.trigger(Speak {
+        if random_chance(rate) {
+            let msg = "Quack.";
+            commands.trigger(Quack {
                 entity: duck,
                 text: msg.to_string(),
             })
         }
     }
+}
+
+fn spawn_sounds_on_quack(event: On<Quack>, mut commands: Commands, asset_server: Res<AssetServer>) {
+    let id = random_range(1..=4);
+    let name = format!("wek{id}.ogg");
+    let speed = random_range(0.95..=1.5);
+
+    let sound = commands
+        .spawn((
+            Transform::IDENTITY,
+            AudioPlayer::new(asset_server.load(name)),
+            PlaybackSettings::DESPAWN
+                .with_spatial(true)
+                .with_speed(speed)
+                .with_volume(Volume::Linear(1.0)),
+        ))
+        .id();
+
+    commands.entity(event.entity).add_child(sound);
 }
