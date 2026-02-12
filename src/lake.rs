@@ -1,6 +1,5 @@
 use bevy::color::palettes::tailwind::*;
 use bevy::prelude::*;
-use rand::*;
 use std::collections::BTreeMap;
 
 use crate::math::random_vec;

@@ -17,6 +17,7 @@ opt-level = 3
 
 [dependencies]
 bevy = { version = "0.18", features = [ "debug" ] }
+bevy_rich_text3d = "0.6.0"
 bevy_vector_shapes = "0.12.0"
 noiz = "0.4.0"
 rand = "0.10.0"

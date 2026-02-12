@@ -6,6 +6,7 @@ use rand::*;
 use crate::math::{random_chance, random_vec};
 use crate::particles::{RippleEmitter, Splash};
 use crate::player::PlayerDuck;
+use crate::text_bubble::Speak;
 
 pub fn player_plugin(app: &mut App) {
     app.add_systems(Startup, add_ducks);
@@ -28,6 +29,7 @@ pub fn player_plugin(app: &mut App) {
             propagate_duck_physics,
             move_duck_heads,
             update_head_turning_transform,
+            randomly_speak,
         )
             .chain(),
     );
@@ -323,7 +325,7 @@ const GRAVITY: f32 = -9.81;
 
 fn apply_gravity_to_ducks(ducks: Query<(&mut Duck, &mut Transform)>) {
     let dt = 0.02;
-    for (mut duck, mut tf) in ducks {
+    for (mut duck, tf) in ducks {
         if tf.translation.y > 0.0 {
             duck.velocity.y += GRAVITY * dt;
         }
@@ -479,5 +481,17 @@ fn spawn_ripples_if_kicking(ducks: Query<(&Duck, &mut RippleEmitter)>) {
             continue;
         }
         emitter.is_on = duck.is_kicking || random_chance(0.001);
+    }
+}
+
+fn randomly_speak(mut commands: Commands, ducks: Query<Entity, With<Duckling>>) {
+    for duck in ducks {
+        if random_chance(0.001) {
+            let msg = "HELLO THERE";
+            commands.trigger(Speak {
+                entity: duck,
+                text: msg.to_string(),
+            })
+        }
     }
 }

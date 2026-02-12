@@ -1,5 +1,6 @@
 use bevy::asset::AssetMetaCheck;
 use bevy::prelude::*;
+use bevy_rich_text3d::Text3dPlugin;
 use bevy_vector_shapes::prelude::*;
 
 mod clouds;
@@ -11,6 +12,7 @@ mod math;
 mod particles;
 mod player;
 mod test_scene;
+mod text_bubble;
 mod weather;
 
 fn main() {
@@ -22,6 +24,11 @@ fn main() {
             meta_check: AssetMetaCheck::Never,
             ..default()
         }))
+        .add_plugins(Text3dPlugin {
+            default_atlas_dimension: (2048, 2048),
+            load_system_fonts: true,
+            ..Default::default()
+        })
         .add_plugins(ShapePlugin::default())
         // .add_plugins(camera_plugin)
         .add_plugins(player::player_plugin)
@@ -31,6 +38,7 @@ fn main() {
         .add_plugins(particles::particles_plugin)
         .add_plugins(clouds::clouds_plugin)
         .add_plugins(weather::weather_plugin)
+        .add_plugins(text_bubble::text_bubble_plugin)
         .add_systems(Startup, setup)
         .run();
 }

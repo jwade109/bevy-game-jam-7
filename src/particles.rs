@@ -10,7 +10,7 @@ pub fn particles_plugin(app: &mut App) {
     app.add_systems(
         FixedUpdate,
         (
-            spawn_splashes,
+            // spawn_ripples_at_sources,
             spawn_ripples,
             accelerate_particles_with_gravity,
             propagate_velocity,
@@ -91,13 +91,12 @@ fn setup_resources(
     commands.insert_resource(res);
 }
 
-fn spawn_splashes(
+#[allow(unused)]
+fn spawn_ripples_at_sources(
     mut commands: Commands,
     resources: Res<ParticleResources>,
     mut messages: MessageReader<Splash>,
 ) {
-    return;
-
     for msg in messages.read() {
         let size = random_range(0.05..=0.25);
 
