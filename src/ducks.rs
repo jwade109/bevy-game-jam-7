@@ -140,6 +140,8 @@ fn assign_parent_to_parentless_ducks(
     Ok(())
 }
 
+const NUM_DUCKS: usize = 20;
+
 fn add_ducks(mut commands: Commands) {
     commands.trigger(AddDuck {
         transform: Transform::default(),
@@ -147,7 +149,7 @@ fn add_ducks(mut commands: Commands) {
         is_child: false,
     });
 
-    for _ in 0..120 {
+    for _ in 0..NUM_DUCKS {
         let r = rand::rng().random_range(2.0..100.0);
         let a = rand::rng().random_range(0.0..std::f32::consts::PI * 2.0);
 

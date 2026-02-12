@@ -46,11 +46,13 @@ fn on_add_lake_cell(
 
     let rotation = Transform::from_rotation(rot);
 
-    commands.spawn((tf, LakeCell)).with_child((
-        Mesh3d(mesh.0.clone()),
-        rotation,
-        MeshMaterial3d(mat.0.clone()),
-    ));
+    commands
+        .spawn((tf, LakeCell, InheritedVisibility::VISIBLE))
+        .with_child((
+            Mesh3d(mesh.0.clone()),
+            rotation,
+            MeshMaterial3d(mat.0.clone()),
+        ));
 }
 
 #[derive(Resource)]
