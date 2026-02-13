@@ -99,7 +99,7 @@ fn draw_boid_forces(mut gizmos: Gizmos, sep: Query<(&Transform, &Boid), Without<
 
 fn draw_all_ducks_seeking_parent(
     mut gizmos: Gizmos,
-    ducks: Query<&Transform, (With<Duckling>, Without<ParentDuck>)>,
+    ducks: Query<&Transform, (With<Duckling>, Without<Following>)>,
 ) {
     for tf in ducks {
         let p = tf.translation.with_y(DUCK_DEBUG_MARKERS_Y + 2.0);
@@ -113,7 +113,7 @@ fn draw_all_ducks_seeking_parent(
 fn draw_all_ducks_with_parent(
     mut gizmos: Gizmos,
     transforms: Query<&Transform, With<Duck>>,
-    ducklings: Query<(&Transform, &ParentDuck)>,
+    ducklings: Query<(&Transform, &Following)>,
 ) -> Result {
     for (tf, parent) in ducklings {
         let parent_tf = transforms.get(parent.duck)?;

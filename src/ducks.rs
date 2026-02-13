@@ -13,8 +13,6 @@ use crate::weather::{LightningEvent, Weather};
 pub fn player_plugin(app: &mut App) {
     app.add_systems(Startup, add_ducks);
 
-    app.add_systems(Update, randomize_targets_on_r);
-
     app.add_systems(
         FixedUpdate,
         (
@@ -44,6 +42,7 @@ pub fn player_plugin(app: &mut App) {
             ducklings_randomly_quack,
             ducks_quack_based_on_current_parents,
             celebrating_ducks_quack_excitedly,
+            adult_ducks_occasionally_pontificate,
         ),
     );
 
@@ -126,16 +125,14 @@ pub struct TargetPosition {
 pub struct Duckling;
 
 #[derive(Component, Debug)]
-pub struct ParentDuck {
+pub struct Following {
     pub duck: Entity,
 }
 
 impl TargetPosition {
-    fn new() -> Self {
-        let x = rand::rng().random_range(-100.0..100.0);
-        let z = rand::rng().random_range(-100.0..100.0);
+    fn from_tf(tf: Transform) -> Self {
         Self {
-            pos: Vec3::new(x, 0.0, z),
+            pos: tf.translation.with_y(0.0),
         }
     }
 }
@@ -148,38 +145,58 @@ struct Celebrating {
 fn celebrating_ducks_quack_excitedly(mut commands: Commands, cel: Query<&Celebrating>) {
     for cel in cel {
         if random_chance(0.03) {
-            let quack = Quack {
-                entity: cel.duck,
-                text: "Happy quack!".into(),
-            };
-            commands.write_message(quack);
+            commands.write_message(Quack::info(cel.duck, "Happy quack!"));
         }
     }
 }
 
 fn assign_parent_to_parentless_ducks(
     mut commands: Commands,
-    adults: Query<(Entity, &Transform), (With<Duck>, Without<Duckling>)>,
-    parentless: Query<(Entity, &Transform), (With<Duckling>, Without<ParentDuck>)>,
+    adults: Query<(Entity, &Transform, Option<&PlayerDuck>), (With<Duck>, Without<Duckling>)>,
+    ducklings: Query<(Entity, &Transform, Option<&Following>, &TrueParent), With<Duckling>>,
 ) -> Result {
-    for (pl, p) in parentless {
-        for (e, q) in adults {
+    for (duckling_id, p, following, true_parent) in ducklings {
+        // if a duckling is already following its parent, we're done here.
+        if let Some(follow) = following {
+            if true_parent.0 == follow.duck {
+                continue;
+            }
+        }
+
+        for (adult_id, q, is_player) in adults {
+            // don't even consider following an adult if it's not close enough.
             let dist = p.translation.distance(q.translation);
-            if dist < 15.0 {
-                commands.entity(pl).insert(ParentDuck { duck: e });
-                info!("Assigned duckling {} parent of {}", pl, e);
+            if dist > 15.0 {
+                continue;
+            }
+
+            // if a duckling is already following someone, it shouldn't reparent
+            // unless that new candidate IS its parent.
+            // it should never re-target if it's already following its parent.
+
+            if true_parent.0 == adult_id {
+                commands
+                    .entity(duckling_id)
+                    .insert(Following { duck: adult_id });
                 commands.spawn((
-                    Celebrating { duck: pl },
+                    Celebrating { duck: duckling_id },
                     DespawnAfter::new(std::time::Duration::from_secs(3)),
                 ));
-                break;
+                info!("Duckling {} found its parent! ({})", duckling_id, adult_id);
+            }
+            // otherwise, if this adult is the player, we should follow it, but only
+            else if is_player.is_some() {
+                commands
+                    .entity(duckling_id)
+                    .insert(Following { duck: adult_id });
             }
         }
     }
     Ok(())
 }
 
-const NUM_DUCKS: usize = 70;
+const NUM_CHILDREN: usize = 45;
+const NUM_ADULTS: usize = 20;
 
 fn add_ducks(mut commands: Commands) {
     commands.trigger(AddDuck {
@@ -188,7 +205,7 @@ fn add_ducks(mut commands: Commands) {
         is_child: false,
     });
 
-    for _ in 0..NUM_DUCKS {
+    let mut spawn_duck = |is_child: bool| {
         let r = rand::rng().random_range(2.0..100.0);
         let a = rand::rng().random_range(0.0..std::f32::consts::PI * 2.0);
 
@@ -196,8 +213,6 @@ fn add_ducks(mut commands: Commands) {
         let z = r * a.sin();
 
         let angle = rand::rng().random_range(0.0..std::f32::consts::PI * 2.0);
-
-        let is_child = random_chance(0.9);
 
         let scale = if is_child {
             random_range(0.2..0.3)
@@ -214,6 +229,14 @@ fn add_ducks(mut commands: Commands) {
             is_player: false,
             is_child,
         });
+    };
+
+    for _ in 0..NUM_ADULTS {
+        spawn_duck(false);
+    }
+
+    for _ in 0..NUM_CHILDREN {
+        spawn_duck(true);
     }
 }
 
@@ -236,7 +259,6 @@ fn on_add_duck(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    asset_server: Res<AssetServer>,
 ) {
     let body = meshes.add(Capsule3d::new(0.5, 2.0));
     let head = meshes.add(Capsule3d::new(0.3, 1.0));
@@ -291,7 +313,9 @@ fn on_add_duck(
             MeshMaterial3d(material.clone()),
         ))
         .insert_if(PlayerDuck, || event.is_player)
-        .insert_if(TargetPosition::new(), || !event.is_player)
+        .insert_if(TargetPosition::from_tf(event.transform), || {
+            !event.is_player
+        })
         .id();
 
     let head = commands
@@ -326,7 +350,7 @@ fn on_add_duck(
 }
 
 fn update_target_pos_for_ducks_with_parents(
-    ducks: Query<(&ParentDuck, &mut TargetPosition)>,
+    ducks: Query<(&Following, &mut TargetPosition)>,
     transforms: Query<&Transform>,
 ) -> Result {
     for (parent, mut tp) in ducks {
@@ -471,16 +495,6 @@ fn control_boids(ducks: Query<(&mut Duck, &Transform, &Boid)>) {
     }
 }
 
-fn randomize_targets_on_r(keys: Res<ButtonInput<KeyCode>>, targets: Query<&mut TargetPosition>) {
-    if !keys.just_pressed(KeyCode::KeyR) {
-        return;
-    }
-
-    for mut tp in targets {
-        *tp = TargetPosition::new();
-    }
-}
-
 fn spawn_particles_if_kicking(
     mut messages: MessageWriter<Splash>,
     ducks: Query<(&Duck, &Transform)>,
@@ -522,32 +536,20 @@ fn ducklings_randomly_quack(
 
     for duck in ducks {
         if random_chance(rate) {
-            let msg = "Quack.";
-            commands.write_message(Quack {
-                entity: duck,
-                text: msg.to_string(),
-            });
+            commands.write_message(Quack::noise(duck, "Quack."));
         }
     }
 }
 
 fn ducks_quack_based_on_current_parents(
     mut commands: Commands,
-    ducks: Query<(Entity, &TrueParent, &ParentDuck), With<Duckling>>,
+    ducks: Query<(Entity, &TrueParent, &Following), With<Duckling>>,
 ) {
     for (e, true_parent, actual_parent) in ducks {
         if true_parent.0 != actual_parent.duck && random_chance(0.01) {
-            let quack = Quack {
-                entity: e,
-                text: "Where is my parent?".into(),
-            };
-            commands.write_message(quack);
+            commands.write_message(Quack::info(e, "Where is my parent?"));
         } else if true_parent.0 == actual_parent.duck && random_chance(0.004) {
-            let quack = Quack {
-                entity: e,
-                text: "Contented quack.".into(),
-            };
-            commands.write_message(quack);
+            commands.write_message(Quack::info(e, "Contented quack."));
         }
     }
 }
@@ -559,15 +561,8 @@ fn ducklings_freak_out_on_lightning(
 ) {
     for duck in ducklings {
         if random_chance(0.7) {
-            let quack = Quack {
-                entity: duck,
-                text: "AHHH!!".into(),
-            };
-
-            commands.write_message(quack);
-
-            let jump = DuckJump { duck };
-            commands.write_message(jump);
+            commands.write_message(Quack::info(duck, "AHHHH!!"));
+            commands.write_message(DuckJump { duck });
         }
     }
 }
@@ -596,6 +591,16 @@ fn spawn_sounds_on_quack(
         commands.entity(quack.entity).add_child(sound);
     }
 }
+fn adult_ducks_occasionally_pontificate(
+    mut commands: Commands,
+    ducks: Query<Entity, (With<Duck>, Without<Duckling>)>,
+) {
+    for duck in ducks {
+        if random_chance(0.001) {
+            commands.write_message(Quack::noise(duck, "How come Aquaman can control whales?"));
+        }
+    }
+}
 
 #[derive(Component, Debug)]
 pub struct TrueParent(pub Entity);
@@ -603,7 +608,7 @@ pub struct TrueParent(pub Entity);
 pub fn assign_true_parents(
     mut commands: Commands,
     ducklings: Query<Entity, (With<Duckling>, Without<TrueParent>)>,
-    adults: Query<Entity, (With<Duck>, Without<Duckling>)>,
+    adults: Query<Entity, (With<Duck>, Without<Duckling>, Without<PlayerDuck>)>,
 ) {
     for duckling in ducklings {
         for adult in adults {

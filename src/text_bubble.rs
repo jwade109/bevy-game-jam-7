@@ -1,5 +1,3 @@
-use std::num::NonZero;
-
 use bevy::prelude::*;
 use bevy_rich_text3d::{Text3d, Text3dStyling, TextAtlas};
 
@@ -10,21 +8,47 @@ use crate::{
 
 pub fn text_bubble_plugin(app: &mut App) {
     app.add_systems(
-        Update,
+        FixedUpdate,
         (
+            handle_quack_messages,
             point_text_2d_towards_camera,
             sync_transforms_to_parent,
-            handle_quack_messages,
-        ),
+        )
+            .chain(),
     );
 
     app.add_message::<Quack>();
 }
 
+#[derive(Debug, Clone, Copy)]
+enum QuackKind {
+    Noise,
+    Info,
+}
+
 #[derive(Message, Debug, Clone)]
 pub struct Quack {
     pub entity: Entity,
-    pub text: String,
+    text: String,
+    kind: QuackKind,
+}
+
+impl Quack {
+    pub fn noise(entity: Entity, text: impl Into<String>) -> Self {
+        Self {
+            entity,
+            text: text.into(),
+            kind: QuackKind::Noise,
+        }
+    }
+
+    pub fn info(entity: Entity, text: impl Into<String>) -> Self {
+        Self {
+            entity,
+            text: text.into(),
+            kind: QuackKind::Info,
+        }
+    }
 }
 
 #[derive(Component)]
@@ -57,12 +81,17 @@ fn handle_quack_messages(
             ))
             .id();
 
+        let color = match quack.kind {
+            QuackKind::Info => Srgba::new(1., 1., 1., 1.),
+            QuackKind::Noise => Srgba::WHITE.with_alpha(0.4),
+        };
+
         let e = commands
             .spawn((
                 Text3d::new(quack.text.clone()),
                 Text3dStyling {
                     size: 80.,
-                    color: Srgba::new(1., 1., 1., 1.),
+                    color,
                     world_scale: Some(Vec2::splat(0.23)),
                     layer_offset: 0.001,
                     font: "SNPro-Regular".into(),
