@@ -33,6 +33,7 @@ pub fn player_plugin(app: &mut App) {
             propagate_duck_physics,
             move_duck_heads,
             update_head_turning_transform,
+            spawn_sounds_on_quack,
         ),
     );
 
@@ -53,7 +54,6 @@ pub fn player_plugin(app: &mut App) {
 
     app.add_message::<DuckJump>();
 
-    app.add_observer(spawn_sounds_on_quack);
     app.add_observer(on_add_duck);
     app.add_observer(ducklings_freak_out_on_lightning);
 }
@@ -152,7 +152,7 @@ fn celebrating_ducks_quack_excitedly(mut commands: Commands, cel: Query<&Celebra
                 entity: cel.duck,
                 text: "Happy quack!".into(),
             };
-            commands.trigger(quack);
+            commands.write_message(quack);
         }
     }
 }
@@ -523,10 +523,10 @@ fn ducklings_randomly_quack(
     for duck in ducks {
         if random_chance(rate) {
             let msg = "Quack.";
-            commands.trigger(Quack {
+            commands.write_message(Quack {
                 entity: duck,
                 text: msg.to_string(),
-            })
+            });
         }
     }
 }
@@ -541,13 +541,13 @@ fn ducks_quack_based_on_current_parents(
                 entity: e,
                 text: "Where is my parent?".into(),
             };
-            commands.trigger(quack);
+            commands.write_message(quack);
         } else if true_parent.0 == actual_parent.duck && random_chance(0.004) {
             let quack = Quack {
                 entity: e,
                 text: "Contented quack.".into(),
             };
-            commands.trigger(quack);
+            commands.write_message(quack);
         }
     }
 }
@@ -564,8 +564,7 @@ fn ducklings_freak_out_on_lightning(
                 text: "AHHH!!".into(),
             };
 
-            // TODO this causes perf issues. message queue?
-            commands.trigger(quack);
+            commands.write_message(quack);
 
             let jump = DuckJump { duck };
             commands.write_message(jump);
@@ -573,23 +572,29 @@ fn ducklings_freak_out_on_lightning(
     }
 }
 
-fn spawn_sounds_on_quack(event: On<Quack>, mut commands: Commands, asset_server: Res<AssetServer>) {
-    let id = random_range(1..=4);
-    let name = format!("wek{id}.ogg");
-    let speed = random_range(0.95..=1.5);
+fn spawn_sounds_on_quack(
+    mut messages: MessageReader<Quack>,
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+) {
+    for quack in messages.read() {
+        let id = random_range(1..=4);
+        let name = format!("wek{id}.ogg");
+        let speed = random_range(0.95..=1.5);
 
-    let sound = commands
-        .spawn((
-            Transform::IDENTITY,
-            AudioPlayer::new(asset_server.load(name)),
-            PlaybackSettings::DESPAWN
-                .with_spatial(true)
-                .with_speed(speed)
-                .with_volume(Volume::Linear(1.0)),
-        ))
-        .id();
+        let sound = commands
+            .spawn((
+                Transform::IDENTITY,
+                AudioPlayer::new(asset_server.load(name)),
+                PlaybackSettings::DESPAWN
+                    .with_spatial(true)
+                    .with_speed(speed)
+                    .with_volume(Volume::Linear(1.0)),
+            ))
+            .id();
 
-    commands.entity(event.entity).add_child(sound);
+        commands.entity(quack.entity).add_child(sound);
+    }
 }
 
 #[derive(Component, Debug)]
