@@ -100,7 +100,7 @@ fn toggle_weather_on_m(
 }
 
 #[derive(Event)]
-struct LightningEvent;
+pub struct LightningEvent;
 
 #[derive(Component)]
 struct Lightning;

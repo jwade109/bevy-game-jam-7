@@ -1,6 +1,6 @@
 use bevy::{input::mouse::MouseWheel, prelude::*};
 
-use crate::ducks::Duck;
+use crate::ducks::{Duck, DuckJump};
 
 pub fn player_plugin(app: &mut App) {
     app.insert_resource(CameraScale {
@@ -77,16 +77,17 @@ fn update_camera_scale(mut events: MessageReader<MouseWheel>, mut scale: ResMut<
 }
 
 fn handle_player_keys(
+    mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
-    ducks: Query<(&mut Duck, &Transform), With<PlayerDuck>>,
+    ducks: Query<(Entity, &mut Duck, &Transform), With<PlayerDuck>>,
 ) {
-    for (mut duck, transform) in ducks {
+    for (e, mut duck, transform) in ducks {
         let mut velocity = Vec3::ZERO;
         let mut angular_velocity = 0.0;
 
         // jumping
         if keys.just_pressed(KeyCode::Space) {
-            duck.velocity.y += 10.0;
+            commands.write_message(DuckJump { duck: e });
         }
 
         // forward

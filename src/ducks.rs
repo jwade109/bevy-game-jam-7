@@ -8,7 +8,7 @@ use crate::math::{random_chance, random_vec};
 use crate::particles::{RippleEmitter, Splash};
 use crate::player::PlayerDuck;
 use crate::text_bubble::Quack;
-use crate::weather::Weather;
+use crate::weather::{LightningEvent, Weather};
 
 pub fn player_plugin(app: &mut App) {
     app.add_systems(Startup, add_ducks);
@@ -18,8 +18,9 @@ pub fn player_plugin(app: &mut App) {
     app.add_systems(
         FixedUpdate,
         (
+            handle_duck_jump_messages,
+            assign_true_parents,
             assign_parent_to_parentless_ducks,
-            celebrating_ducks_quack_excitedly,
             damp_velocity,
             apply_gravity_to_ducks,
             update_ducks_above_sea_level,
@@ -32,9 +33,17 @@ pub fn player_plugin(app: &mut App) {
             propagate_duck_physics,
             move_duck_heads,
             update_head_turning_transform,
-            duckings_randomly_quack,
-        )
-            .chain(),
+        ),
+    );
+
+    // quacking behaviors
+    app.add_systems(
+        FixedUpdate,
+        (
+            ducklings_randomly_quack,
+            ducks_quack_based_on_current_parents,
+            celebrating_ducks_quack_excitedly,
+        ),
     );
 
     app.add_systems(
@@ -42,9 +51,11 @@ pub fn player_plugin(app: &mut App) {
         (spawn_particles_if_kicking, spawn_ripples_if_kicking),
     );
 
-    app.add_observer(spawn_sounds_on_quack);
+    app.add_message::<DuckJump>();
 
+    app.add_observer(spawn_sounds_on_quack);
     app.add_observer(on_add_duck);
+    app.add_observer(ducklings_freak_out_on_lightning);
 }
 
 #[derive(Component, Default, Debug)]
@@ -499,7 +510,7 @@ fn spawn_ripples_if_kicking(ducks: Query<(&Duck, &mut RippleEmitter)>) {
     }
 }
 
-fn duckings_randomly_quack(
+fn ducklings_randomly_quack(
     mut commands: Commands,
     ducks: Query<Entity, With<Duckling>>,
     weather: Res<State<Weather>>,
@@ -516,6 +527,48 @@ fn duckings_randomly_quack(
                 entity: duck,
                 text: msg.to_string(),
             })
+        }
+    }
+}
+
+fn ducks_quack_based_on_current_parents(
+    mut commands: Commands,
+    ducks: Query<(Entity, &TrueParent, &ParentDuck), With<Duckling>>,
+) {
+    for (e, true_parent, actual_parent) in ducks {
+        if true_parent.0 != actual_parent.duck && random_chance(0.01) {
+            let quack = Quack {
+                entity: e,
+                text: "Where is my parent?".into(),
+            };
+            commands.trigger(quack);
+        } else if true_parent.0 == actual_parent.duck && random_chance(0.004) {
+            let quack = Quack {
+                entity: e,
+                text: "Contented quack.".into(),
+            };
+            commands.trigger(quack);
+        }
+    }
+}
+
+fn ducklings_freak_out_on_lightning(
+    _event: On<LightningEvent>,
+    mut commands: Commands,
+    ducklings: Query<Entity, With<Duckling>>,
+) {
+    for duck in ducklings {
+        if random_chance(0.7) {
+            let quack = Quack {
+                entity: duck,
+                text: "AHHH!!".into(),
+            };
+
+            // TODO this causes perf issues. message queue?
+            commands.trigger(quack);
+
+            let jump = DuckJump { duck };
+            commands.write_message(jump);
         }
     }
 }
@@ -537,4 +590,43 @@ fn spawn_sounds_on_quack(event: On<Quack>, mut commands: Commands, asset_server:
         .id();
 
     commands.entity(event.entity).add_child(sound);
+}
+
+#[derive(Component, Debug)]
+pub struct TrueParent(pub Entity);
+
+pub fn assign_true_parents(
+    mut commands: Commands,
+    ducklings: Query<Entity, (With<Duckling>, Without<TrueParent>)>,
+    adults: Query<Entity, (With<Duck>, Without<Duckling>)>,
+) {
+    for duckling in ducklings {
+        for adult in adults {
+            if random_chance(0.01) {
+                let p = TrueParent(adult);
+                info!("Assigned duckling {} a true parent of {}", duckling, adult);
+                commands.entity(duckling).insert(p);
+            }
+        }
+    }
+}
+
+#[derive(Message)]
+pub struct DuckJump {
+    pub duck: Entity,
+}
+
+pub fn handle_duck_jump_messages(
+    mut messages: MessageReader<DuckJump>,
+    mut ducks: Query<&mut Duck>,
+) {
+    for msg in messages.read() {
+        let Ok(mut duck) = ducks.get_mut(msg.duck) else {
+            return;
+        };
+
+        let vel = random_range(4.0..=11.0);
+
+        duck.velocity.y += vel;
+    }
 }

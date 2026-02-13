@@ -18,6 +18,7 @@ pub fn debug_plugin(app: &mut App) {
             draw_all_ducks_seeking_parent,
             draw_all_ducks_with_parent,
             draw_all_spatial_audio,
+            draw_true_parents,
         )
             .run_if(is_debug_enabled),
     );
@@ -137,6 +138,26 @@ fn draw_all_spatial_audio(
         for r in [0.2, 0.3, 0.4, 0.5] {
             gizmos.sphere(Isometry3d::from_translation(tf.translation), r, PURPLE);
         }
+    }
+    Ok(())
+}
+
+fn draw_true_parents(
+    mut gizmos: Gizmos,
+    transforms: TransformHelper,
+    ducklings: Query<(&Transform, &TrueParent)>,
+) -> Result {
+    for (tf, parent) in ducklings {
+        let parent_tf = transforms
+            .compute_global_transform(parent.0)?
+            .compute_transform();
+        let p = tf.translation.with_y(DUCK_DEBUG_MARKERS_Y + 2.0);
+        let q = parent_tf.translation.with_y(DUCK_DEBUG_MARKERS_Y + 2.0);
+        gizmos.line(p, q, TEAL);
+        let p = Transform::from_translation(p).with_scale(Vec3::splat(0.5));
+        let q = Transform::from_translation(q).with_scale(Vec3::splat(0.3));
+        gizmos.cube(p, RED);
+        gizmos.cube(q, GREEN);
     }
     Ok(())
 }
