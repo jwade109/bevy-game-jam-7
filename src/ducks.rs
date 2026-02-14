@@ -1,13 +1,16 @@
 use bevy::audio::Volume;
 use bevy::color::palettes::tailwind::*;
 use bevy::prelude::*;
+use bevy_rich_text3d::Text3d;
 use rand::*;
 
+use crate::child_rel::*;
 use crate::despawn_after::DespawnAfter;
 use crate::math::{random_chance, random_vec};
 use crate::particles::{RippleEmitter, Splash};
 use crate::player::PlayerDuck;
-use crate::text_bubble::Quack;
+use crate::text_bubble::SpawnScoreMarker;
+use crate::text_bubble::{Quack, ScoreLabel};
 use crate::weather::{LightningEvent, Weather};
 
 pub fn player_plugin(app: &mut App) {
@@ -32,6 +35,7 @@ pub fn player_plugin(app: &mut App) {
             move_duck_heads,
             update_head_turning_transform,
             spawn_sounds_on_quack,
+            update_score_labels,
         ),
     );
 
@@ -131,11 +135,6 @@ pub struct TargetPosition {
 #[derive(Component)]
 pub struct Duckling;
 
-#[derive(Component, Debug)]
-pub struct Following {
-    pub duck: Entity,
-}
-
 impl TargetPosition {
     fn from_tf(tf: Transform) -> Self {
         Self {
@@ -160,12 +159,12 @@ fn celebrating_ducks_quack_excitedly(mut commands: Commands, cel: Query<&Celebra
 fn assign_parent_to_parentless_ducks(
     mut commands: Commands,
     adults: Query<(Entity, &Transform, Option<&PlayerDuck>), (With<Duck>, Without<Duckling>)>,
-    ducklings: Query<(Entity, &Transform, Option<&Following>, &TrueParent), With<Duckling>>,
+    ducklings: Query<(Entity, &Transform, Option<&Following>, &DuckParent), With<Duckling>>,
 ) -> Result {
     for (duckling_id, p, following, true_parent) in ducklings {
         // if a duckling is already following its parent, we're done here.
         if let Some(follow) = following {
-            if true_parent.0 == follow.duck {
+            if true_parent.0 == follow.0 {
                 continue;
             }
         }
@@ -181,12 +180,10 @@ fn assign_parent_to_parentless_ducks(
             // unless that new candidate IS its parent.
             // it should never re-target if it's already following its parent.
 
-            let old_parent = following.map(|f| f.duck);
+            let old_parent = following.map(|f| f.0);
 
             if true_parent.0 == adult_id {
-                commands
-                    .entity(duckling_id)
-                    .insert(Following { duck: adult_id });
+                commands.entity(duckling_id).insert(Following(adult_id));
                 commands.spawn((
                     Celebrating { duck: duckling_id },
                     DespawnAfter::new(std::time::Duration::from_secs(3)),
@@ -201,9 +198,7 @@ fn assign_parent_to_parentless_ducks(
             }
             // otherwise, if this adult is the player, we should follow it
             else if is_player.is_some() {
-                commands
-                    .entity(duckling_id)
-                    .insert(Following { duck: adult_id });
+                commands.entity(duckling_id).insert(Following(adult_id));
             }
         }
     }
@@ -333,6 +328,10 @@ fn on_add_duck(
         })
         .id();
 
+    if !event.is_child && !event.is_player {
+        commands.trigger(SpawnScoreMarker { duck: root });
+    }
+
     let head = commands
         .spawn((
             head_transform,
@@ -369,7 +368,7 @@ fn update_target_pos_for_ducks_with_parents(
     transforms: Query<&Transform>,
 ) -> Result {
     for (parent, mut tp) in ducks {
-        let tf = transforms.get(parent.duck)?;
+        let tf = transforms.get(parent.0)?;
         tp.pos = tf.translation;
     }
     Ok(())
@@ -558,12 +557,12 @@ fn ducklings_randomly_quack(
 
 fn ducks_quack_based_on_current_parents(
     mut commands: Commands,
-    ducks: Query<(Entity, &TrueParent, &Following), With<Duckling>>,
+    ducks: Query<(Entity, &DuckParent, &Following), With<Duckling>>,
 ) {
     for (e, true_parent, actual_parent) in ducks {
-        if true_parent.0 != actual_parent.duck && random_chance(0.01) {
+        if true_parent.0 != actual_parent.0 && random_chance(0.01) {
             commands.write_message(Quack::noise(e, "Where is my parent?"));
-        } else if true_parent.0 == actual_parent.duck && random_chance(0.004) {
+        } else if true_parent.0 == actual_parent.0 && random_chance(0.004) {
             commands.write_message(Quack::info(e, "Contented quack."));
         }
     }
@@ -617,18 +616,15 @@ fn adult_ducks_occasionally_pontificate(
     }
 }
 
-#[derive(Component, Debug)]
-pub struct TrueParent(pub Entity);
-
 pub fn assign_true_parents(
     mut commands: Commands,
-    ducklings: Query<Entity, (With<Duckling>, Without<TrueParent>)>,
+    ducklings: Query<Entity, (With<Duckling>, Without<DuckParent>)>,
     adults: Query<Entity, (With<Duck>, Without<Duckling>, Without<PlayerDuck>)>,
 ) {
     for duckling in ducklings {
         for adult in adults {
             if random_chance(0.01) {
-                let p = TrueParent(adult);
+                let p = DuckParent(adult);
                 info!("Assigned duckling {} a true parent of {}", duckling, adult);
                 commands.entity(duckling).insert(p);
             }
@@ -654,4 +650,18 @@ pub fn handle_duck_jump_messages(
 
         duck.velocity.y += vel;
     }
+}
+
+pub fn update_score_labels(
+    text: Query<(&mut Text3d, &ScoreLabel)>,
+    children: Query<&DuckChildren>,
+    following: Query<&FollowedBy>,
+) -> Result {
+    for (mut t, label) in text {
+        let n_following = children.get(label.duck).map(|c| c.len()).unwrap_or(0);
+        let n_children = following.get(label.duck).map(|c| c.len()).unwrap_or(0);
+        let s = format!("{}/{}", n_following, n_children);
+        *t = Text3d::new(s)
+    }
+    Ok(())
 }

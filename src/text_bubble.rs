@@ -17,6 +17,8 @@ pub fn text_bubble_plugin(app: &mut App) {
             .chain(),
     );
 
+    app.add_observer(on_spawn_adult_duck);
+
     app.add_message::<Quack>();
 }
 
@@ -64,6 +66,67 @@ impl Quack {
 struct TextBubble {
     parent: Entity,
     offset: Vec3,
+}
+
+#[derive(Event)]
+pub struct SpawnScoreMarker {
+    pub duck: Entity,
+}
+
+#[derive(Component)]
+pub struct ScoreLabel {
+    pub duck: Entity,
+}
+
+fn on_spawn_adult_duck(
+    event: On<SpawnScoreMarker>,
+    mut commands: Commands,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let p = random_vec(2.0, 15.0);
+    let tf = Transform::from_xyz(p.x, 4.0, p.y);
+    let y = 2.5;
+
+    let root = commands
+        .spawn((
+            TextBubble {
+                parent: event.duck,
+                offset: Vec3::new(0.0, y, 0.0),
+            },
+            tf,
+            InheritedVisibility::VISIBLE,
+        ))
+        .id();
+
+    let color = Srgba::RED;
+
+    let world_scale = 0.7;
+
+    let e = commands
+        .spawn((
+            Text3d::new("BIGMODE"),
+            ScoreLabel { duck: event.duck },
+            Text3dStyling {
+                size: 80.,
+                color,
+                world_scale: Some(Vec2::splat(world_scale)),
+                layer_offset: 0.001,
+                font: "SNPro-Regular".into(),
+                ..Default::default()
+            },
+            Transform::from_xyz(0.0, 0.0, 0.01),
+            Mesh3d::default(),
+            MeshMaterial3d(materials.add(StandardMaterial {
+                base_color_texture: Some(TextAtlas::DEFAULT_IMAGE.clone()),
+                alpha_mode: AlphaMode::Blend,
+                emissive: Srgba::WHITE.with_alpha(0.3).into(),
+                ..Default::default()
+            })),
+            InheritedVisibility::VISIBLE,
+        ))
+        .id();
+
+    commands.entity(root).add_child(e);
 }
 
 fn handle_quack_messages(

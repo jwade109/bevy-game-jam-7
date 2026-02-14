@@ -16,6 +16,7 @@ mod test_scene;
 mod text_bubble;
 mod ui;
 mod weather;
+mod child_rel;
 
 fn main() {
     let mut app = App::new();

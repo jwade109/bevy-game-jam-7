@@ -3,6 +3,7 @@
 use bevy::color::palettes::css::*;
 use bevy::prelude::*;
 
+use crate::child_rel::{DuckParent, Following};
 use crate::ducks::*;
 use crate::player::PlayerDuck;
 
@@ -116,7 +117,7 @@ fn draw_all_ducks_with_parent(
     ducklings: Query<(&Transform, &Following)>,
 ) -> Result {
     for (tf, parent) in ducklings {
-        let parent_tf = transforms.get(parent.duck)?;
+        let parent_tf = transforms.get(parent.0)?;
         let p = tf.translation.with_y(DUCK_DEBUG_MARKERS_Y + 2.0);
         let q = parent_tf.translation.with_y(DUCK_DEBUG_MARKERS_Y + 2.0);
         gizmos.line(p, q, TEAL);
@@ -145,7 +146,7 @@ fn draw_all_spatial_audio(
 fn draw_true_parents(
     mut gizmos: Gizmos,
     transforms: TransformHelper,
-    ducklings: Query<(&Transform, &TrueParent)>,
+    ducklings: Query<(&Transform, &DuckParent)>,
 ) -> Result {
     for (tf, parent) in ducklings {
         let parent_tf = transforms
