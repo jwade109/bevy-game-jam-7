@@ -30,3 +30,7 @@ rand = "0.10.0"
 [lints.clippy]
 too_many_arguments = "allow"
 type_complexity = "allow"
+
+[target.wasm32-unknown-unknown.dependencies]
+getrandom_v2 = { version = "0.3.4", features = ["wasm_js"], package = "getrandom" }
+getrandom    = { version = "0.4.1", features = ["wasm_js"] }
