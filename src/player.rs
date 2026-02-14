@@ -5,7 +5,7 @@ use crate::ducks::{Duck, DuckJump};
 pub fn player_plugin(app: &mut App) {
     app.insert_resource(CameraScale {
         target: 0.0,
-        actual: 0.5,
+        actual: 1.0,
     });
 
     app.add_systems(
@@ -29,18 +29,17 @@ struct CameraScale {
 pub struct PlayerDuck;
 
 fn camera_transform(player: Transform, scale: f32) -> Transform {
-    let cx = 2.0.lerp(0.0, scale);
-    let cy = 2.0.lerp(30.0, scale);
-    let cz = -5.0.lerp(-1.0, scale);
+    let c1 = Vec3::new(2.0, 2.0, -5.0);
+    let c2 = Vec3::new(0.0, 30.0, -15.0);
 
-    let mut camera = player * Transform::from_xyz(cx, cy, cz);
+    let f1 = Vec3::new(0.0, 0.0, 10.0);
+    let f2 = Vec3::new(0.0, 0.0, 15.0);
 
-    let fx = 0.0;
-    let fy = 0.0;
-    let fz = 10.0.lerp(15.0, scale);
+    let c = c1.lerp(c2, scale);
+    let f = f1.lerp(f2, scale);
 
-    let focus_transform = Transform::from_xyz(fx, fy, fz);
-
+    let mut camera = player * Transform::from_translation(c);
+    let focus_transform = Transform::from_translation(f);
     let focus = player * focus_transform;
 
     camera.look_at(focus.translation, Vec3::Y);

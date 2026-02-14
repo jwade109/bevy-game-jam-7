@@ -205,8 +205,8 @@ fn assign_parent_to_parentless_ducks(
     Ok(())
 }
 
-const NUM_CHILDREN: usize = 45;
-const NUM_ADULTS: usize = 20;
+const NUM_CHILDREN: usize = 20;
+const NUM_ADULTS: usize = 0;
 
 fn add_ducks(mut commands: Commands) {
     commands.trigger(AddDuck {
