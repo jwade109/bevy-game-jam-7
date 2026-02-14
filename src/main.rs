@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use bevy_rich_text3d::{LoadFonts, Text3dPlugin};
 use bevy_vector_shapes::prelude::*;
 
+mod child_rel;
 mod clouds;
 mod debug;
 mod despawn_after;
@@ -16,7 +17,6 @@ mod test_scene;
 mod text_bubble;
 mod ui;
 mod weather;
-mod child_rel;
 
 fn main() {
     let mut app = App::new();
