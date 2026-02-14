@@ -14,6 +14,7 @@ mod particles;
 mod player;
 mod test_scene;
 mod text_bubble;
+mod ui;
 mod weather;
 
 fn main() {
@@ -50,6 +51,7 @@ fn main() {
         .add_plugins(weather::weather_plugin)
         .add_plugins(text_bubble::text_bubble_plugin)
         .add_plugins(despawn_after::despawn_after_plugin)
+        .add_plugins(ui::ui_plugin)
         .add_systems(Startup, setup)
         .run();
 }

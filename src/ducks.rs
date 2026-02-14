@@ -60,6 +60,7 @@ pub fn player_plugin(app: &mut App) {
 #[derive(Component, Default, Debug)]
 pub struct Duck {
     pub is_kicking: bool,
+    pub is_boosting: bool,
     pub speed_mod: f32,
     pub velocity: Vec3,
     pub angular_acceleration: f32,
@@ -77,7 +78,13 @@ impl Duck {
     pub fn body_fixed_acceleration(&self) -> Vec3 {
         let buoyancy = (-self.above_sea_level).max(0.0) * 100.0;
         let kicking = if self.is_in_water() {
-            self.is_kicking as u8 as f32 * 10.0
+            let kick = self.is_kicking as u8 as f32 * 10.0;
+            let boost = if self.is_kicking && self.is_boosting {
+                10.0
+            } else {
+                0.0
+            };
+            kick + boost
         } else {
             0.0
         };
@@ -174,6 +181,8 @@ fn assign_parent_to_parentless_ducks(
             // unless that new candidate IS its parent.
             // it should never re-target if it's already following its parent.
 
+            let old_parent = following.map(|f| f.duck);
+
             if true_parent.0 == adult_id {
                 commands
                     .entity(duckling_id)
@@ -182,9 +191,15 @@ fn assign_parent_to_parentless_ducks(
                     Celebrating { duck: duckling_id },
                     DespawnAfter::new(std::time::Duration::from_secs(3)),
                 ));
+
+                if let Some(old) = old_parent {
+                    let quack = Quack::important(old, "Here, take your kid please.");
+                    commands.write_message(quack);
+                }
+
                 info!("Duckling {} found its parent! ({})", duckling_id, adult_id);
             }
-            // otherwise, if this adult is the player, we should follow it, but only
+            // otherwise, if this adult is the player, we should follow it
             else if is_player.is_some() {
                 commands
                     .entity(duckling_id)
@@ -547,7 +562,7 @@ fn ducks_quack_based_on_current_parents(
 ) {
     for (e, true_parent, actual_parent) in ducks {
         if true_parent.0 != actual_parent.duck && random_chance(0.01) {
-            commands.write_message(Quack::info(e, "Where is my parent?"));
+            commands.write_message(Quack::noise(e, "Where is my parent?"));
         } else if true_parent.0 == actual_parent.duck && random_chance(0.004) {
             commands.write_message(Quack::info(e, "Contented quack."));
         }

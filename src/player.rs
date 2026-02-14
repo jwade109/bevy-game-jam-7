@@ -111,6 +111,8 @@ fn handle_player_keys(
         }
 
         duck.is_kicking = keys.pressed(KeyCode::KeyW);
+        duck.is_boosting = keys.pressed(KeyCode::ShiftLeft);
+
         duck.angular_acceleration = angular_velocity * 2.0;
     }
 }

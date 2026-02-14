@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{color::palettes::tailwind::*, prelude::*};
 use bevy_rich_text3d::{Text3d, Text3dStyling, TextAtlas};
 
 use crate::{
@@ -24,6 +24,7 @@ pub fn text_bubble_plugin(app: &mut App) {
 enum QuackKind {
     Noise,
     Info,
+    Important,
 }
 
 #[derive(Message, Debug, Clone)]
@@ -47,6 +48,14 @@ impl Quack {
             entity,
             text: text.into(),
             kind: QuackKind::Info,
+        }
+    }
+
+    pub fn important(entity: Entity, text: impl Into<String>) -> Self {
+        Self {
+            entity,
+            text: text.into(),
+            kind: QuackKind::Important,
         }
     }
 }
@@ -84,6 +93,13 @@ fn handle_quack_messages(
         let color = match quack.kind {
             QuackKind::Info => Srgba::new(1., 1., 1., 1.),
             QuackKind::Noise => Srgba::WHITE.with_alpha(0.4),
+            QuackKind::Important => BLUE_700,
+        };
+
+        let world_scale = match quack.kind {
+            QuackKind::Noise => 0.17,
+            QuackKind::Info => 0.23,
+            QuackKind::Important => 0.4,
         };
 
         let e = commands
@@ -92,7 +108,7 @@ fn handle_quack_messages(
                 Text3dStyling {
                     size: 80.,
                     color,
-                    world_scale: Some(Vec2::splat(0.23)),
+                    world_scale: Some(Vec2::splat(world_scale)),
                     layer_offset: 0.001,
                     font: "SNPro-Regular".into(),
                     ..Default::default()
