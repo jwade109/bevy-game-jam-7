@@ -84,7 +84,7 @@ impl Duck {
         let kicking = if self.is_in_water() {
             let kick = self.is_kicking as u8 as f32 * 10.0;
             let boost = if self.is_kicking && self.is_boosting {
-                10.0
+                30.0
             } else {
                 0.0
             };
@@ -156,10 +156,16 @@ fn celebrating_ducks_quack_excitedly(mut commands: Commands, cel: Query<&Celebra
     }
 }
 
+#[derive(Component)]
+struct Done;
+
 fn assign_parent_to_parentless_ducks(
     mut commands: Commands,
     adults: Query<(Entity, &Transform, Option<&PlayerDuck>), (With<Duck>, Without<Duckling>)>,
-    ducklings: Query<(Entity, &Transform, Option<&Following>, &DuckParent), With<Duckling>>,
+    ducklings: Query<
+        (Entity, &Transform, Option<&Following>, &DuckParent),
+        (With<Duckling>, Without<Done>),
+    >,
 ) -> Result {
     for (duckling_id, p, following, true_parent) in ducklings {
         // if a duckling is already following its parent, we're done here.
@@ -183,7 +189,9 @@ fn assign_parent_to_parentless_ducks(
             let old_parent = following.map(|f| f.0);
 
             if true_parent.0 == adult_id {
-                commands.entity(duckling_id).insert(Following(adult_id));
+                commands
+                    .entity(duckling_id)
+                    .insert((Following(adult_id), Done));
                 commands.spawn((
                     Celebrating { duck: duckling_id },
                     DespawnAfter::new(std::time::Duration::from_secs(3)),
@@ -195,6 +203,7 @@ fn assign_parent_to_parentless_ducks(
                 }
 
                 info!("Duckling {} found its parent! ({})", duckling_id, adult_id);
+                break;
             }
             // otherwise, if this adult is the player, we should follow it
             else if is_player.is_some() {
@@ -206,7 +215,7 @@ fn assign_parent_to_parentless_ducks(
 }
 
 const NUM_CHILDREN: usize = 20;
-const NUM_ADULTS: usize = 0;
+const NUM_ADULTS: usize = 3;
 
 fn add_ducks(mut commands: Commands) {
     commands.trigger(AddDuck {
@@ -514,7 +523,7 @@ fn spawn_particles_if_kicking(
     ducks: Query<(&Duck, &Transform)>,
 ) {
     for (duck, transform) in ducks {
-        if duck.is_kicking && duck.is_in_water() {
+        if duck.is_boosting && duck.is_in_water() {
             let vx = rand::rng().random_range(-5.0..=5.0);
             let vy = rand::rng().random_range(2.0..=5.0);
             let vz = rand::rng().random_range(-5.0..=5.0);
@@ -658,8 +667,8 @@ pub fn update_score_labels(
     following: Query<&FollowedBy>,
 ) -> Result {
     for (mut t, label) in text {
-        let n_following = children.get(label.duck).map(|c| c.len()).unwrap_or(0);
-        let n_children = following.get(label.duck).map(|c| c.len()).unwrap_or(0);
+        let n_children = children.get(label.duck).map(|c| c.len()).unwrap_or(0);
+        let n_following = following.get(label.duck).map(|c| c.len()).unwrap_or(0);
         let s = format!("{}/{}", n_following, n_children);
         *t = Text3d::new(s)
     }
