@@ -10,7 +10,10 @@ use crate::{
 
 pub fn weather_plugin(app: &mut App) {
     // app.add_systems(Startup, add_rain_sounds);
-    app.add_systems(Startup, (add_sunlight, set_sky_color));
+    app.add_systems(
+        Startup,
+        (add_sunlight, set_sky_color, do_thunderstorm).chain(),
+    );
 
     app.add_systems(Update, (spawn_lightning_on_l, toggle_weather_on_m));
     app.add_systems(FixedUpdate, update_lightning);
@@ -58,6 +61,10 @@ fn on_thunderstorm(mut commands: Commands, mut color: ResMut<ClearColor>) {
     commands.trigger(SetCloudColor(Srgba::gray(0.2).into()));
 
     color.0 = GRAY_700.into();
+}
+
+fn do_thunderstorm(mut commands: Commands) {
+    commands.set_state(Weather::Thunderstorm);
 }
 
 fn brighten_sun(mut sun: Single<&mut DirectionalLight, With<Sun>>) {

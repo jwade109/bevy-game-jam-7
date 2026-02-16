@@ -279,10 +279,17 @@ fn on_add_duck(
     let r = rand::rng().random_range(2.0..100.0);
     let a = rand::rng().random_range(0.0..std::f32::consts::PI * 2.0);
 
-    let x = r * a.cos();
-    let z = r * a.sin();
+    let (x, z) = if event.is_player {
+        (0.0, 0.0)
+    } else {
+        (r * a.cos(), r * a.sin())
+    };
 
-    let angle = rand::rng().random_range(0.0..std::f32::consts::PI * 2.0);
+    let angle = if event.is_player {
+        0.3
+    } else {
+        rand::rng().random_range(0.0..std::f32::consts::PI * 2.0)
+    };
 
     let is_child = event.parent.is_some();
 
