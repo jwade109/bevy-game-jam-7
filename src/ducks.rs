@@ -14,13 +14,12 @@ use crate::text_bubble::{Quack, ScoreLabel};
 use crate::weather::{LightningEvent, Weather};
 
 pub fn player_plugin(app: &mut App) {
-    app.add_systems(Startup, add_ducks);
+    app.add_systems(Startup, add_parents);
 
     app.add_systems(
         FixedUpdate,
         (
             handle_duck_jump_messages,
-            assign_true_parents,
             assign_parent_to_parentless_ducks,
             damp_velocity,
             apply_gravity_to_ducks,
@@ -58,6 +57,7 @@ pub fn player_plugin(app: &mut App) {
     app.add_message::<DuckJump>();
 
     app.add_observer(on_add_duck);
+    app.add_observer(on_add_children);
     app.add_observer(ducklings_freak_out_on_lightning);
 }
 
@@ -120,11 +120,17 @@ impl Duck {
     }
 }
 
-#[derive(Component, Event, Debug)]
+#[derive(Event, Debug)]
 struct AddDuck {
-    transform: Transform,
     is_player: bool,
-    is_child: bool,
+    color: Srgba,
+    parent: Option<Entity>,
+}
+
+#[derive(Event, Debug)]
+struct SpawnChildren {
+    color: Srgba,
+    parent: Entity,
 }
 
 #[derive(Component, Debug, Default)]
@@ -214,48 +220,39 @@ fn assign_parent_to_parentless_ducks(
     Ok(())
 }
 
-const NUM_CHILDREN: usize = 20;
-const NUM_ADULTS: usize = 3;
+#[derive(Component)]
+struct DuckColor(Srgba);
 
-fn add_ducks(mut commands: Commands) {
+fn add_parents(mut commands: Commands) {
     commands.trigger(AddDuck {
-        transform: Transform::default(),
         is_player: true,
-        is_child: false,
+        color: GRAY_100,
+        parent: None,
     });
 
-    let mut spawn_duck = |is_child: bool| {
-        let r = rand::rng().random_range(2.0..100.0);
-        let a = rand::rng().random_range(0.0..std::f32::consts::PI * 2.0);
+    let colors = [TEAL_300, YELLOW_200, RED_600, PURPLE_600];
 
-        let x = r * a.cos();
-        let z = r * a.sin();
-
-        let angle = rand::rng().random_range(0.0..std::f32::consts::PI * 2.0);
-
-        let scale = if is_child {
-            random_range(0.2..0.3)
-        } else {
-            random_range(0.6..1.0)
-        };
-
-        let transform = Transform::from_xyz(x, 0.0, z)
-            .with_rotation(Quat::from_rotation_y(angle))
-            .with_scale(Vec3::splat(scale));
-
+    for color in colors {
         commands.trigger(AddDuck {
-            transform,
             is_player: false,
-            is_child,
+            color,
+            parent: None,
         });
-    };
-
-    for _ in 0..NUM_ADULTS {
-        spawn_duck(false);
     }
+}
 
-    for _ in 0..NUM_CHILDREN {
-        spawn_duck(true);
+fn on_add_children(event: On<SpawnChildren>, mut commands: Commands) {
+    info!("Spawning children for {:?}", event);
+
+    let n = random_range(4..=9);
+
+    for _ in 0..n {
+        let child = AddDuck {
+            is_player: false,
+            color: event.color,
+            parent: Some(event.parent),
+        };
+        commands.trigger(child);
     }
 }
 
@@ -279,13 +276,31 @@ fn on_add_duck(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let r = rand::rng().random_range(2.0..100.0);
+    let a = rand::rng().random_range(0.0..std::f32::consts::PI * 2.0);
+
+    let x = r * a.cos();
+    let z = r * a.sin();
+
+    let angle = rand::rng().random_range(0.0..std::f32::consts::PI * 2.0);
+
+    let is_child = event.parent.is_some();
+
+    let scale = if is_child {
+        random_range(0.2..0.3)
+    } else {
+        random_range(0.6..1.0)
+    };
+
+    let transform = Transform::from_xyz(x, 0.0, z)
+        .with_rotation(Quat::from_rotation_y(angle))
+        .with_scale(Vec3::splat(scale));
+
     let body = meshes.add(Capsule3d::new(0.5, 2.0));
     let head = meshes.add(Capsule3d::new(0.3, 1.0));
     let eye = meshes.add(Sphere::new(0.05));
 
-    let color = Srgba::gray(rand::rng().random_range(0.2..0.99));
-
-    let material = materials.add(StandardMaterial::from_color(color));
+    let material = materials.add(StandardMaterial::from_color(event.color));
     let bill_material = materials.add(StandardMaterial::from_color(YELLOW_400));
     let eye_material = materials.add(StandardMaterial::from_color(GRAY_950));
 
@@ -307,7 +322,7 @@ fn on_add_duck(
     let right_eye_transform = Transform::from_xyz(eye_distance / 2.0, 0.6, 0.2);
     let left_eye_transform = Transform::from_xyz(-eye_distance / 2.0, 0.6, 0.2);
 
-    let speed_mod = if event.is_child {
+    let speed_mod = if is_child {
         random_range(1.3..=2.1)
     } else {
         random_range(0.9..=1.1)
@@ -322,7 +337,8 @@ fn on_add_duck(
                 speed_mod,
                 ..default()
             },
-            event.transform,
+            DuckColor(event.color),
+            transform,
             RippleEmitter::default(),
             InheritedVisibility::VISIBLE,
         ))
@@ -332,12 +348,10 @@ fn on_add_duck(
             MeshMaterial3d(material.clone()),
         ))
         .insert_if(PlayerDuck, || event.is_player)
-        .insert_if(TargetPosition::from_tf(event.transform), || {
-            !event.is_player
-        })
+        .insert_if(TargetPosition::from_tf(transform), || !event.is_player)
         .id();
 
-    if !event.is_child && !event.is_player {
+    if !is_child && !event.is_player {
         commands.trigger(SpawnScoreMarker { duck: root });
     }
 
@@ -363,12 +377,19 @@ fn on_add_duck(
 
     commands.entity(root).add_child(head);
 
-    if event.is_child {
-        commands.entity(root).insert(Duckling);
+    if let Some(parent) = event.parent {
+        commands.entity(root).insert((Duckling, DuckParent(parent)));
     }
 
     if !event.is_player {
         commands.entity(root).insert(Boid::default());
+    }
+
+    if event.parent.is_none() && !event.is_player {
+        commands.trigger(SpawnChildren {
+            color: event.color,
+            parent: root,
+        });
     }
 }
 
@@ -621,22 +642,6 @@ fn adult_ducks_occasionally_pontificate(
     for duck in ducks {
         if random_chance(0.001) {
             commands.write_message(Quack::noise(duck, "How come Aquaman can control whales?"));
-        }
-    }
-}
-
-pub fn assign_true_parents(
-    mut commands: Commands,
-    ducklings: Query<Entity, (With<Duckling>, Without<DuckParent>)>,
-    adults: Query<Entity, (With<Duck>, Without<Duckling>, Without<PlayerDuck>)>,
-) {
-    for duckling in ducklings {
-        for adult in adults {
-            if random_chance(0.01) {
-                let p = DuckParent(adult);
-                info!("Assigned duckling {} a true parent of {}", duckling, adult);
-                commands.entity(duckling).insert(p);
-            }
         }
     }
 }
